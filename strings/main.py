@@ -37,13 +37,13 @@ first_name = player[0:player.find(' ')]
 last_name_len = len(player[(player.find(' ')+1):])
 
 #Step 4:  isolate and store the player's name
-name_short= f'{first_name[0]}. {player[-last_name_len:]}'
+name_short = f'{first_name[0]}. {player[-last_name_len:]}'
 
 #Step 5: First name plus '!', times the number of characters in their first name. Make sure the last character of this string is not a space! 
-chant= ((first_name + '! ') * len(first_name)).rstrip()
+chant = ((first_name + '! ') * len(first_name)).rstrip()
 
 #Step 6: Make super sure the last character of chant is NOT a SPACE
-good_chant= (chant[-1] != ' ')
+good_chant = (chant[-1] != ' ')
 
 """
 Exercise concluded
