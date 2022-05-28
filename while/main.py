@@ -19,13 +19,15 @@ def main():
 
 def unique_koala_facts(i):
     if i < 1000:
+        a = 0
         unique_fact_list =[]
-        while len(unique_fact_list) < i:
+        while len(unique_fact_list) < i or a < i:
             fact = random_koala_fact()
             if fact not in unique_fact_list:
                 unique_fact_list.append(fact)
+            a = a + 1
         return unique_fact_list
-    else: 
+    else:  
         message = 'limit surpassed'
         return message
 
@@ -89,5 +91,3 @@ def koala_weight():
 
 if __name__ == "__main__":
     main()
-    
-
