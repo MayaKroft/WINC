@@ -12,7 +12,7 @@ __human_name__ = "while"
         
 def main(): 
     print(random_koala_fact())
-    print(unique_koala_facts(3))
+    print(unique_koala_facts(50))
     print(num_joey_facts())
     print(koala_weight())
 
@@ -21,11 +21,15 @@ def unique_koala_facts(i):
     if i < 1000:
         a = 0
         unique_fact_list =[]
-        while len(unique_fact_list) < i or a < i:
+        while len(unique_fact_list) < i:
+            a = a + 1
             fact = random_koala_fact()
             if fact not in unique_fact_list:
                 unique_fact_list.append(fact)
-            a = a + 1
+            elif a == 1000:
+                break
+            else:
+                continue
         return unique_fact_list
     else:  
         message = 'limit surpassed'
