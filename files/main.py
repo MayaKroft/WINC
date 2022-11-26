@@ -22,7 +22,6 @@ def main():
     clean_cache()
     cache_zip(zip_path, full_path)
     print(find_password(cachelist))
-    clean_cache()
 
 
 # Global variables
