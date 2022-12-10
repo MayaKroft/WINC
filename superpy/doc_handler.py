@@ -4,7 +4,6 @@ import math
 import json
 import getdate
 import datetime
-import numpy as np
 import pandas as pd
 from rich import box
 from rich.text import Text
@@ -19,20 +18,25 @@ as well as a choice to grab a pre existing CSV, JSON or XLS file
 to convert it's information to the programs CSV format plus doing most of the data handling that is gotten or passed through to documents
 
 ------INDEX--------
-CLASSES ---------------------------    28-53
-    ItemById----------------------- 
-    ItemByName---------------------
-BASIC FILE FUNCTIONS---------------
-    dict_list_csv()----------------
-    backup_csv()
-    wipe_csv()
-INFO GETTERS
-    get_last_id()
-    is_valid_id()
+CLASSES ---------------------------------------    42-69
 
+BASIC FILE FUNCTIONS---------------------------    70-112
 
+INFO GETTERS-----------------------------------    113-692
 
+REPORT SECTION---------------------------------    693-1345
 
+BUY ACTION HANDLING----------------------------    1346-1365
+
+PRICE ACTION HANDLING--------------------------    1366-1391
+
+SELL ACTION HANDLING---------------------------    1392-1453
+
+SAVE ACTION HANDLING---------------------------    1454-1538
+ 
+CLASS LIST MAKERS------------------------------    1539-1667
+
+RETRIEVING INFORMATION FROM AN EXTERNAL FILE---    1668-1810
 """
 CONSOLE = Console()
 class ItemById:
@@ -80,27 +84,36 @@ def dict_list_csv(file):
                     dict_list.append(row)
                 return dict_list
 
-def backup_csv(file):
-    CONSOLE.print('The original file will be backed up wit the original name + _backup')
+def backup_csv(file,date = False):
+    date = from_ymd(date) if date else date
+    CONSOLE.print('The original file will be backed up with the original name + _backup')
     original = dict_list_csv(file)
-    backup_name = file[:len(file)-4] + '_backup.csv'
-    with open(backup_name, 'w') as backup_file:
-        writer = csv.DictWriter(backup_file, fieldnames= original[0].keys()) 
-        writer.writeheader() 
-        writer.writerows(original)  
-    CONSOLE.print('Backup completed')
+    backup_name = file[:len(file)-4] + '_backup_' + date +'.csv'
+    backup_path = os.path.join('backup',backup_name)
+    if original:
+        with open(backup_path, 'w') as backup_file:
+            writer = csv.DictWriter(backup_file, fieldnames= original[0].keys()) 
+            writer.writeheader() 
+            writer.writerows(original)  
+        CONSOLE.print(f'Backup completed and saved to {backup_path}')
+    else:
+        CONSOLE.print('There was no data to backup')
 
-def wipe_csv(file):
-    backup_csv(file)
+def wipe_csv(file,date, headers = False):
+    headers = headers if headers else list(pd.read_csv(file).columns)
+    backup_csv(file, date)
     f = open(file, "w+")
     f.close()
+    with open(file,'w') as fh:
+        writer= csv.DictWriter(fh, fieldnames= headers)
+        writer.writeheader()
     CONSOLE.print("Wipe out completed")
 
 
 # ------------------------------- INFO GETTERS --------------------------------#
 def get_last_id(document): #not with dict_list_csv() because it consider the possibility of no data yet
-    if document == 'purchased.csv':
-         with open('purchased.csv', newline='', mode="r") as buying_file:
+    if document == 'bought.csv':
+         with open('bought.csv', newline='', mode="r") as buying_file:
             reader = csv.DictReader(buying_file)
             data = [row for row in reader]
             if data:
@@ -126,7 +139,7 @@ def get_last_id(document): #not with dict_list_csv() because it consider the pos
 
 def is_valid_id(id, date = 0):
     id = id if isinstance(id, int) else int(id)
-    bought = dict_list_csv('purchased.csv')
+    bought = dict_list_csv('bought.csv')
     is_valid = False
     if date:
         for item in bought:
@@ -145,7 +158,7 @@ def is_valid_id(id, date = 0):
 
 def is_valid_item(item, date = 0):
     is_valid = False
-    bought = dict_list_csv('purchased.csv')
+    bought = dict_list_csv('bought.csv')
     if date:
         for i in bought:
             if i['product_name'] == item:
@@ -166,7 +179,7 @@ def is_valid_item(item, date = 0):
 
 def get_name(id):
     id = id if isinstance(id, int) else int(id)
-    bought = dict_list_csv('purchased.csv')
+    bought = dict_list_csv('bought.csv')
     name= False
     for item in bought:
         if int(item['id']) == id:
@@ -179,20 +192,29 @@ def get_name(id):
 def last_sale_price(id, given_date): #This function searches the price history of the item
     #up to and including the current date for the latest price of the item
     id = id if type(id) == int else int(id)
-    price_history = dict_list_csv('price_history.csv')
-    last_price = None
-   
+    given_date = to_ymd(given_date) if isinstance(given_date, str) else given_date
+    price_history = dict_list_csv('prices.csv')
+    last_price = 0
+    price_dates = []
+
     for item in price_history:
         if int(item['id']) == id:
             if to_ymd(item['price_date']) <= given_date:
+                price_dates.append(to_ymd(item['price_date']))
+
+    for item in price_history:
+        if int(item['id']) == id:
+            if price_dates and to_ymd(item['price_date']) == max(price_dates):
                 last_price = float(item['price'])
+
     return last_price
 
 def last_buy_price(id, given_date): #This function searches the buy price history of the item
     #up to and including the current date for the latest price of the item
     id = id if type(id) == int else int(id)
-    bought = dict_list_csv('purchased.csv')
-    last_buy_price = None
+    given_date = to_ymd(given_date) if isinstance(given_date, str) else given_date
+    bought = dict_list_csv('bought.csv')
+    last_buy_price = 0
     last_date = None
    
     for item in bought:
@@ -202,6 +224,8 @@ def last_buy_price(id, given_date): #This function searches the buy price histor
                     if to_ymd(item['buy_date']) >= last_date:
                         last_buy_price = float(item['buy_price'])
                         last_date = to_ymd(item['buy_date'])
+                    else:
+                        last_buy_price = float(item['buy_price'])
                 else:
                     last_date = to_ymd(item['buy_date'])
                     last_buy_price = float(item['buy_price'])
@@ -211,17 +235,15 @@ def amount_sold(id, end_date, start_date= 0):
     id = id if isinstance(id, int) else int(id)
     sold = dict_list_csv('sold.csv')
     amount_sold = 0
-    
     for item in sold:
         sell_date = to_ymd(item['sell_date'])
         if int(item['id']) == id:
             if start_date:
-                if sell_date <= end_date and sell_date>=start_date:
+                if sell_date <= end_date and sell_date >= start_date:
                     amount_sold += int(item['amount_sold'])
             else:
                 if sell_date <= end_date:
                     amount_sold += int(item['amount_sold'])
-
     return amount_sold
 
 def get_total_revenue(id, end_date, start_date= 0):
@@ -234,7 +256,7 @@ def get_total_revenue(id, end_date, start_date= 0):
             if int(item['id']) == id:
                 if sell_date <= end_date and sell_date >= start_date:
                     total_revenue += (float(item['sell_price']) * int(item['amount_sold']))
-        return total_revenue
+        return round(total_revenue, 2)
 
     else:
         for item in sold:
@@ -244,17 +266,49 @@ def get_total_revenue(id, end_date, start_date= 0):
                     total_revenue += (float(item['sell_price']) * int(item['amount_sold']))
         return total_revenue
 
+def get_total_cost(id,end_date,start_date= 0):
+    id = id if isinstance(id, int) else int(id)
+    bought = dict_list_csv('bought.csv')
+    if start_date:
+        total_cost = 0
+        bought_on_range = []
+        for i in bought:
+            if int(i['id']) == id:
+                if to_ymd(i['buy_date']) >= start_date and to_ymd(i['buy_date']) <= end_date:
+                    bought_on_range.append(i)
+            else:
+                pass
+        for b in bought_on_range:
+            total_cost +=  float(b['buy_price']) * int(b['amount'])
+        return total_cost
+        
+        #if start_date == end_date:
+        #    total_cost = (last_buy_price(id, end_date) * amount_sold(id, end_date, start_date))
+        #    return total_cost
+        #else:
+        """ total_cost = 0.0
+        for b_item in bought:
+            buy_date = to_ymd(b_item['buy_date'])
+            if int(b_item['id']) == id and buy_date >= start_date and buy_date <= end_date:
+                total_cost += (float(b_item['buy_price']) * int(b_item['amount'])) """
+
+    else:
+        total_cost = 0.0
+        for b_item in bought :
+            buy_date = to_ymd(b_item['buy_date'])
+            if int(b_item['id']) == id and buy_date <= end_date:
+                total_cost += (float(b_item['buy_price']) * int(b_item['amount']))
+        return total_cost
+
+
 def get_total_profit(id,end_date,start_date= 0):
     id = id if isinstance(id, int) else int(id)
-    bought = dict_list_csv('purchased.csv')
+    bought = dict_list_csv('bought.csv')
     if start_date:
         total_revenue = get_total_revenue(id, end_date, start_date)
-        total_cost = 0.0
-        for b_item in bought:
-            if int(b_item['id']) == id:
-                total_cost += (float(b_item['buy_price']) * amount_sold(id, end_date, start_date))
-        total_profit = (total_revenue - total_cost)
-        return total_profit
+        total_cost = get_total_cost(id, end_date, start_date)
+        total_profit = total_revenue - total_cost
+        
 
     else:
         total_revenue = get_total_revenue(id, end_date)
@@ -262,28 +316,17 @@ def get_total_profit(id,end_date,start_date= 0):
         for b_item in bought:
             if int(b_item['id']) == id:
                 total_cost += (float(b_item['buy_price']) * int(b_item['amount']))
-        total_profit = (total_revenue - total_cost)
-        return total_profit
+        total_profit = total_revenue - total_cost
+    
+    return round(total_profit, 2)
 
-def get_total_cost(id,end_date,start_date= 0):
-    id = id if isinstance(id, int) else int(id)
-    bought = dict_list_csv('purchased.csv')
-    if start_date:
-        total_cost = last_buy_price(id,end_date) * amount_sold(id, end_date, start_date)
-        return total_cost
 
-    else:
-        total_cost = 0.0
-        for b_item in bought:
-            if int(b_item['id']) == id:
-                total_cost += (float(b_item['buy_price']) * int(b_item['amount']))
-        return total_cost
 
 def check_amount(id, current_date):
     #make sure it is a valid id
     id = id if type(id) == int else int(id) #just making sure the type is always right
     current_date = current_date if isinstance(current_date, datetime.date) else to_ymd(current_date)
-    bought = dict_list_csv('purchased.csv')
+    bought = dict_list_csv('bought.csv')
     for item in bought:
         if int(item['id']) == id:
             bought = int(item['amount'])
@@ -293,7 +336,7 @@ def check_amount(id, current_date):
 
 def get_id_list(product_name):
     id_list = []
-    bought = dict_list_csv('purchased.csv')
+    bought = dict_list_csv('bought.csv')
     for item in bought:
         if item['product_name'] == product_name:
                         id = int(item['id'])
@@ -301,6 +344,9 @@ def get_id_list(product_name):
     return id_list
 
 def get_available(date, sold_amount, id = 0, item = ''):
+    date = to_ymd(date) if isinstance(date, str) else date
+    id = int(id) if isinstance(id, str) else id
+    sold_amount = int(sold_amount) if isinstance(sold_amount, str) else sold_amount
     if id:
         id = id if type(id) == int else int(id)
         are_remaining= True if check_amount(id, date) >= sold_amount else False
@@ -314,7 +360,6 @@ def get_available(date, sold_amount, id = 0, item = ''):
             #ADD PROGRESS BAR
 
     elif item:
-        console = Console()
         options_total = 0
         product_name = item
         possible_ids = get_id_list(product_name)
@@ -332,11 +377,14 @@ def get_available(date, sold_amount, id = 0, item = ''):
                 available_ids.append(i)
                 available_amounts.append(amount)
                 options_total += amount
+        
+        if available_ids and len(available_ids) == 1:
+            return available_ids[0]
 
-        if available_ids and (options_total > sold_amount):
+        elif available_ids and (options_total > sold_amount):
             available_table.show_footer = True
             available_table.columns[-1].footer = str(sum([int(cell) for cell in available_table.columns[-1].cells]))
-            console.CONSOLE.print(available_table)
+            CONSOLE.print(available_table)
             list_string = input('Please select the IDs followed by the amounts, separated by spaces: ')
             split_list = list_string.split()
             int_list = [int(i) for i in split_list]
@@ -357,7 +405,7 @@ def get_available(date, sold_amount, id = 0, item = ''):
             to_sell = list(zip(available_ids, available_amounts))
             return to_sell
         elif available_ids and options_total < sold_amount:
-            console.CONSOLE.print(available_table)
+            CONSOLE.print(available_table)
             CONSOLE.print(f'There are not enough {product_name} items in the store, \n    {sold_amount} were requested but only {options_total} are available,\n    please repeat the sale request-')
             return False
         else:
@@ -379,7 +427,7 @@ def make_classlist(instance, new_value):
 def id_buy_history(id, start_date, end_date):
     id = id if isinstance(id, int) else int(id)
     id_buy_history = {} 
-    bought= dict_list_csv('purchased.csv')
+    bought= dict_list_csv('bought.csv')
     if start_date == end_date or start_date == 0:
         for buy in bought:
             if id == int(buy['id']):
@@ -460,7 +508,7 @@ def id_sale_history(id, start_date, end_date):
 def id_price_history(id, start_date, end_date):
     id = id if isinstance(id, int) else int(id)
     id_price_history = {}
-    prices = dict_list_csv('price_history.csv')
+    prices = dict_list_csv('prices.csv')
     if start_date == end_date or start_date == 0:
         for price in prices:
             if id == int(price['id']):
@@ -470,7 +518,7 @@ def id_price_history(id, start_date, end_date):
                     if price_str_date not in list(id_price_history.keys()):
                         id_price_history[price_str_date] = float(price['price'])
                     else:
-                        if isinstance(id_price_history[price_str_date], dict):
+                        if isinstance(id_price_history[price_str_date], float):
                             id_price_history[price_str_date] = [id_price_history[price_str_date]] + [float(price['price']),]
                         elif isinstance(id_price_history[price_str_date], list):
                             id_price_history[price_str_date] += [float(price['price']),]
@@ -504,7 +552,6 @@ def id_compound_history(id, start_date, end_date):
     price_history= id_price_history(id,start_date,end_date)
     sale_history= id_sale_history(id, start_date, end_date)
     buy_history= id_buy_history(id, start_date, end_date)
-    
     price_dates= [to_ymd(i) for i in list(price_history.keys())]
     sale_dates= [to_ymd(i) for i in list(sale_history.keys())]
     buy_dates = [to_ymd(i) for i in list(buy_history.keys())]
@@ -523,7 +570,6 @@ def id_compound_history(id, start_date, end_date):
             del tupled_ph[x]
         else:
             continue
-
     for k, v in sale_history.items():
         if isinstance(v, dict):  
             tupled_sh.append(tuple([k,v['sale_price'],v['amount'],v['sale_id']]))
@@ -553,12 +599,14 @@ def id_compound_history(id, start_date, end_date):
                 else:                   
                     if [inner_list[0], buy_tup[1], 0, buy_tup[2], 0, 0, -1] not in compound_history:
                         new_item = [inner_list[0], buy_tup[1], 0, buy_tup[2], 0, 0, -1]
-                        new_items.append(new_item)
+                        if new_item not in new_items:
+                            new_items.append(new_item)
         if new_items:
             for item in new_items:
                 compound_history.append(item)
+                new_items.remove(item)
     
-    #Rare for there to be more than one purchase in an id but it might happen with external imports, new item is used to prevent infinite loop over compond history            
+    #Rare for there to be more than one purchase in an id but it might happen with external imports, new item is used to prevent infinite loop over compound history
     for price_tup in tupled_ph:
         # date[0], sale price[2]
         new_items = []
@@ -570,16 +618,18 @@ def id_compound_history(id, start_date, end_date):
                 elif inner_list[2] and not inner_list[2] == price_tup[1]:
                     new_item = [inner_list[0], 0, 0, 0, 0, 0, -1]
                     new_item[2] = price_tup[1]
-                    new_items.append(new_item)
+                    if new_item not in new_items:
+                        new_items.append(new_item)
         if new_items:
             for item in new_items:
                 compound_history.append(item)
+                new_items.remove(item)           
 
     
-    new_items = []
-    for inner_list in compound_history:
-        for sale_tup in tupled_sh:
+
+    for sale_tup in tupled_sh:
         # date[0], sale_price[2], amount_sold[4],sale_id[6]
+        for inner_list in compound_history:
             if from_ymd(inner_list[0]) == sale_tup[0]:
                 if not inner_list[4]:
                     if inner_list[2] == sale_tup[1]:
@@ -589,76 +639,97 @@ def id_compound_history(id, start_date, end_date):
                         inner_list[2] = sale_tup[1]
                         inner_list[4] = sale_tup[2]
                         inner_list[6] = sale_tup[3]
-    for inner_list in compound_history:
-        for sale_tup in tupled_sh:
+    
+    for sale_tup in tupled_sh:
+        new_items = []
+        for inner_list in compound_history:
         # date[0], sale_price[2], amount_sold[4],sale_id[6]
-            if inner_list[4] and (inner_list[2] == sale_tup[1]) and not (inner_list[6] == sale_tup[3]):
+            if inner_list[4] and inner_list[2] == sale_tup[1] and not inner_list[6] == sale_tup[3]:
                 new_item = [i for i in inner_list]
                 new_item[4] = sale_tup[2]
-                new_items.append(new_item)
-    if new_items:
-        for item in new_items:
-            compound_history.append(item)
+                if new_item not in new_items:
+                        new_items.append(new_item)
+        if new_items:
+            for item in new_items:
+                compound_history.append(item)
+                new_items.remove(item)
     compound_history = sorted(compound_history, key=lambda tup: (tup[0],-tup[1])) 
     return compound_history
 
-def same_names(csv_file, from_headers): #maybe change it to taking just the headers ? or handle it in function but if not if runs equivalents?
+def same_names(csv_file, from_headers): 
     #can return true or a list
     csv_headers = list(pd.read_csv(csv_file).columns)
+    alternative = csv_headers[1:] if csv_file == 'bought.csv' else csv_headers
 
     if (sorted(csv_headers) == sorted(from_headers)
-       or(sorted(csv_headers.remove('id')) == sorted(from_headers)
-       and csv_file == 'purchased.csv')):
+       or (alternative == sorted(from_headers))):
         return True
     elif (set(csv_headers).issubset(set(from_headers)) 
-       or(set(csv_headers.remove('id')).issubset(set(from_headers))
-          and csv_file == 'purchased.csv')):
+       or(set(alternative)).issubset(set(from_headers))):
             extras = list(set(from_headers).difference(csv_headers))
-            if 'sell_price' in extras and csv_file == 'purchased.csv': 
+            if ('sell_price' in extras or 'price' in extras or 'sale_price' in extras) and csv_file == 'bought.csv': 
                 #this can be added thanks to the buy function which would smoothe the import
                 return True
             else:
                 CONSOLE.print(f'The import will continue but only the colums \n{csv_headers} will be imported\n{extras} will be left out')
                 return True
     else: #no full match so now we go to equivalences
-        option = '\nid can be filled in with giberish if absent' if csv_file == 'purchased.csv' else ''
+        option = '\nid can be filled in with giberish if absent' if csv_file == 'bought.csv' else ''
         titles = []
         missing_i=[]
         for x, head in enumerate(csv_headers):
             if head in from_headers:
                 titles.append(head)
+            elif head in [y.lower().replace(' ', '_') for y in from_headers]: #if the headers were almost the same this will detect that
+                for z, from_h in enumerate(from_headers):
+                    if from_h.lower().replace(' ', '_') == head:
+                        titles.append(from_headers[z])
+                        break #this prevents the list from going out of order
+                    else:
+                        continue
             else:
-                titles.append(' ')
+                titles.append(' ') #keeps the spot for easier inserting of correct headers
                 missing_i.append(x)
         remaining_from = [i for i in from_headers if i not in titles]
         remaining_csv = [csv_headers[i] for i in missing_i]
-        dif_titles = input(f'From this list: {remaining_from}\nPlease insert the key/column name equivalents for \n{remaining_csv} \nseparated by a comma ","\n do not add spaces after or before the comma {option}: ')
-        dif_titles = dif_titles.split(',')
-        for x,index in enumerate(missing_i):
-            titles[index] = dif_titles[x]
-
-        for title in dif_titles:
-            not_valid_header = []
-            all_valid = True
-            if title in from_headers:
-                continue
-            else: 
-                all_valid = False
-                not_valid_header.append(title)
-        if all_valid:
-            return titles
+        if remaining_csv:
+            dif_titles = input(f'From this list: {remaining_from}\nPlease insert the key/column name equivalents for \n{remaining_csv} \nseparated by a comma "," do not add spaces after or before the comma {option}: ')
+            if dif_titles:
+                dif_titles = dif_titles.split(',')
+                for x,index in enumerate(missing_i):
+                    titles[index] = dif_titles[x]
+                for title in dif_titles:
+                    not_valid_header = []
+                    all_valid = True
+                    if title in from_headers:
+                        continue
+                    else: 
+                        all_valid = False
+                        not_valid_header.append(title)
+                if all_valid:
+                    return titles
+                else:
+                    CONSOLE.print(f'The following titles given were not valid:\n{not_valid_header}')
+                    choice_input = ('Do you wish to retry/cancel?:')
+                    if choice_input == 'retry':
+                        same_names(csv_file, from_headers)
+                    elif choice_input == 'cancel':
+                        CONSOLE.print('The import will now be canceled')
+                        return False
+                    else:
+                        CONSOLE.print('No valid action was chosen, the import will now be canceled')
+                        return False
+            else: #no input was given
+                CONSOLE.print('No answer was given, the import will be canceled')
+                return False
         else:
-            CONSOLE.print(f'The following titles given were not valid:\n{not_valid_header}')
-            choice_input = ('Do you wish to retry/cancel?:')
-            if choice_input == 'retry':
-                same_names(csv_file, from_headers)
-            elif choice_input == 'cancel':
-                CONSOLE.print('The import will now be canceled')
-                return False
-            else:
-                CONSOLE.print('No valid action was chosen, the import will now be canceled')
-                return False
+            return titles
 
+def add_col_floats(table, col):
+    float_list = [float(cell) for cell in table.columns[col].cells]
+    float_sum = sum(float_list)
+    round_float = round(float_sum, 2)
+    return str(round_float)
 
 #------------------------------- REPORT SECTION -------------------------------#
 def report_inventory(start_date, end_date, verbosity= 1):
@@ -688,14 +759,14 @@ def report_inventory(start_date, end_date, verbosity= 1):
             inventory_table.add_column(field, style=long_color_list[x])
         for item in item_list:
             inventory_table.add_row(
-                str(item.id), item.name, str(item.amount), str(item.buy_date), str(item.buy_price), str(item.expiration), str(item.sale_price), str(item.sold), str(item.remaining), (Text('Expired', style= 'red') if item.expired else Text('Not Expired', style = 'green')), str(item.profit)
+                str(item.id), item.name, str(item.amount), str(item.buy_date), str(item.buy_price), str(item.expiration), str(item.sale_price), str(item.sold), str(item.remaining), (Text('Expired', style= 'red') if item.expired else Text('Valid', style = 'green')), str(item.profit)
                 )
             total_spent += (item.amount * item.buy_price)
         inventory_table.columns[2].footer = str(sum([int(cell) for cell in inventory_table.columns[2].cells]))
-        inventory_table.columns[4].footer = str(total_spent)
+        inventory_table.columns[4].footer = str(round(total_spent, 2))
         inventory_table.columns[7].footer = str(sum([int(cell) for cell in inventory_table.columns[7].cells]))
         inventory_table.columns[8].footer = str(sum([int(cell) for cell in inventory_table.columns[8].cells]))
-        inventory_table.columns[10].footer = str(sum([float(cell) for cell in inventory_table.columns[10].cells]))
+        inventory_table.columns[10].footer = add_col_floats(inventory_table, 10)
 
     elif verbosity == 0:
         for x, field in enumerate(short_fields):
@@ -705,21 +776,21 @@ def report_inventory(start_date, end_date, verbosity= 1):
                 inventory_table.add_row(
                     name_item.name, 
                     str(name_item.remaining),
-                    (Text('Expired', style= 'red') if name_item.expired else Text('Not Expired', style = 'green')), 
-                    str(name_item.profit)
+                    (Text('Expired', style= 'red') if name_item.expired else Text('Valid', style = 'green')), 
+                    str(round(name_item.profit, 2))
                     )
             else:
                 continue
         inventory_table.columns[1].footer = str(sum([int(cell) for cell in inventory_table.columns[1].cells]))
-        inventory_table.columns[3].footer = str(sum([float(cell) for cell in inventory_table.columns[3].cells]))   
-        
+        inventory_table.columns[3].footer = add_col_floats(inventory_table, 3)   
+
     else:
         for x, field in enumerate(fields):
             inventory_table.add_column(field, style=color_list[x])
         for item in item_list:
             if item.remaining:
                 inventory_table.add_row(
-                    str(item.id), item.name, str(item.amount), str(item.buy_price), str(item.expiration), str(item.remaining), (Text('Expired', style= 'red') if item.expired else Text('Not Expired', style = 'green')), str(item.profit)
+                    str(item.id), item.name, str(item.amount), str(item.buy_price), str(item.expiration), str(item.remaining), (Text('Expired', style= 'red') if item.expired else Text('Valid', style = 'green')), str(item.profit)
                     )
                 total_bought += item.amount
                 total_remaining += item.remaining
@@ -729,9 +800,9 @@ def report_inventory(start_date, end_date, verbosity= 1):
             else:
                 continue
         inventory_table.columns[2].footer = str(sum([int(cell) for cell in inventory_table.columns[2].cells]))
-        inventory_table.columns[3].footer = str(total_spent)
+        inventory_table.columns[3].footer = str(round(total_spent, 2))
         inventory_table.columns[5].footer = str(sum([int(cell) for cell in inventory_table.columns[5].cells]))
-        inventory_table.columns[7].footer = str(sum([float(cell) for cell in inventory_table.columns[7].cells]))
+        inventory_table.columns[7].footer = add_col_floats(inventory_table, 7)
     
     return inventory_table
             
@@ -765,7 +836,7 @@ def report_expired(start_date, end_date, verbosity= 1):
         for item in item_list:
             if item.expired:
                 expired_table.add_row(
-                    str(item.id), item.name, str(item.amount), str(item.buy_date), str(item.buy_price), str(item.expiration), str(item.sale_price), str(item.sold), str(item.remaining), (Text('Expired', style= 'red') if item.expired else Text('Not Expired', style = 'green')), str(item.profit)
+                    str(item.id), item.name, str(item.amount), str(item.buy_date), str(item.buy_price), str(item.expiration), str(item.sale_price), str(item.sold), str(item.remaining), (Text('Expired', style= 'red') if item.expired else Text('Valid', style = 'green')), str(item.profit)
                     )
                 total_bought = total_bought + item.amount
                 total_expired = total_expired + item.remaining
@@ -774,10 +845,10 @@ def report_expired(start_date, end_date, verbosity= 1):
                 total_sold = total_sold + item.sold
 
         expired_table.columns[2].footer = str(total_bought)
-        expired_table.columns[4].footer = str(total_spent)
+        expired_table.columns[4].footer = str(round(total_spent, 2))
         expired_table.columns[7].footer = str(total_sold)
         expired_table.columns[8].footer = str(total_expired)
-        expired_table.columns[10].footer = str(total_profit)
+        expired_table.columns[10].footer = str(round(total_profit, 2))
         return expired_table
 
     elif verbosity == 0:
@@ -789,14 +860,14 @@ def report_expired(start_date, end_date, verbosity= 1):
                 expired_table.add_row(
                     name_item.name, 
                     str(name_item.remaining),
-                    (Text('Expired', style= 'red') if name_item.expired else Text('Not Expired', style = 'green')), 
+                    (Text('Expired', style= 'red') if name_item.expired else Text('Valid', style = 'green')), 
                     str(name_item.profit)
                     )
                 total_expired = total_expired + name_item.remaining
                 total_profit = total_profit + name_item.profit
 
             expired_table.columns[1].footer = str(total_expired)
-            expired_table.columns[3].footer = str(total_profit)
+            expired_table.columns[3].footer = str(round(total_profit, 2))
         return expired_table
     else:
         for field in fields:
@@ -805,7 +876,7 @@ def report_expired(start_date, end_date, verbosity= 1):
         for item in item_list:
             if item.expired:
                 expired_table.add_row(
-                    str(item.id), item.name, str(item.amount), str(item.buy_price), str(item.expiration), str(item.remaining), (Text('Expired', style= 'red') if item.expired else Text('Not Expired', style = 'green')), str(item.profit)
+                    str(item.id), item.name, str(item.amount), str(item.buy_price), str(item.expiration), str(item.remaining), (Text('Expired', style= 'red') if item.expired else Text('Valid', style = 'green')), str(item.profit)
                     )
                 total_bought = total_bought + item.amount
                 total_expired = total_expired + item.remaining
@@ -814,9 +885,9 @@ def report_expired(start_date, end_date, verbosity= 1):
                 total_sold = total_sold + item.sold
 
             expired_table.columns[2].footer = str(total_bought)
-            expired_table.columns[3].footer = str(total_spent)
+            expired_table.columns[3].footer = str(round(total_spent, 2))
             expired_table.columns[5].footer = str(total_expired)
-            expired_table.columns[7].footer = str(total_profit)
+            expired_table.columns[7].footer = str(round(total_profit,2))
         return expired_table
 
 def report_profit(start_date, end_date, verbosity= 1):
@@ -828,124 +899,169 @@ def report_profit(start_date, end_date, verbosity= 1):
         date_message = (f'the period from {from_ymd(start_date)} to {from_ymd(end_date)}')
     
     sold = dict_list_csv('sold.csv')
-    colors = ['bold white','royal_blue1','dodger_blue1',  'green3', 'dark_red','green_yellow',  'chartreuse3']
-    columns = ['Date','Item', 'Amount', 'Cost','Revenue', 'Profit', 'Percentage']
+    bought = dict_list_csv('bought.csv')
+    colors = ['bold white','royal_blue1','purple' , 'dodger_blue1', 'dark_red', 'green3', 'green_yellow',  'chartreuse3']
+    columns = ['Date','Item', 'Bought','Sold', 'Cost','Revenue', 'Profit','Percentage']
     profit_table = Table(title= f'Profit report for {date_message}:', box = box.SIMPLE_HEAVY)
     profit_table.show_footer = True
 
+    bought_on_range = []
+    for i in bought:
+        if to_ymd(i['buy_date']) >= start_date and to_ymd(i['buy_date']) <= end_date:
+            bought_on_range.append(i)
+        else:
+            pass
+
+    sold_on_range = []
+    for i in sold:
+        if to_ymd(i['sell_date']) >= start_date and to_ymd(i['sell_date']) <= end_date:
+            sold_on_range.append(i)
+    
+    sale_dates = [to_ymd(i['sell_date']) for i in sold_on_range]
+    buy_dates = [to_ymd(i['buy_date']) for i in bought_on_range]
+    all_dates = sorted([*set(sale_dates + buy_dates)])
+    sale_ids = [int(i['id']) for i in sold_on_range]
+    buy_ids = [int(i['id']) for i in bought_on_range]
+    all_ids = sorted([*set(sale_ids + buy_ids)])
+    all_names= [*set(get_name(id) for id in all_ids)]
+
+    
+    total_profit = 0
+    for id in all_ids:
+        total_profit += get_total_profit(id, end_date, start_date)
+    
+    total_profit = round(total_profit, 2)
+
+
+    def bought(name):
+        bought = 0
+        for id in get_id_list(name):
+            for b in bought_on_range:
+                if int(b['id']) == id:
+                    bought += int(b['amount'])
+        return bought
+        
     def profit(name):
         profit = 0
         for id in get_id_list(name):
             profit += get_total_profit(id, end_date, start_date)
-        return profit
+        return round(profit,2)
     def amount(name):
         amount = 0
         for id in get_id_list(name):
             amount += amount_sold(id, end_date, start_date)
         return amount
+
     def cost(name):
         cost = 0
         for id in get_id_list(name):
             cost += get_total_cost(id, end_date, start_date)
-        return cost
+        return round(cost,2)
     def revenue(name):
         revenue = 0
         for id in get_id_list(name):
             revenue += get_total_revenue(id, end_date, start_date)
-        return revenue
+        return round(revenue,2)
 
     if verbosity == 0:
-        ids = [*set(i['id'] for i in sold) ]
-        total_profit = 0
-        for id in ids:
-            total_profit += get_total_profit(id, end_date, start_date)
         profit_message = (f'The total profit for {date_message} is: {total_profit}')
         return profit_message
 
     elif verbosity == 2:
-        if start_date == end_date:
-            sold_on_date =[i for i in sold if to_ymd(i['sell_date'])==end_date]
-            sold_items = [*set(get_name(int(i['id'])) for i in sold_on_date)]
-            
-            all_profit = sum([profit(name) for name in sold_items])
+        if start_date == end_date: 
             for x,n in enumerate(columns[1:]):
                 profit_table.add_column(n, style = colors[x+1])
        
-            for name in sold_items:
-                profit_table.add_row(name, str(amount(name)), str(cost(name)), str(revenue(name)),str(profit(name)), str(round((profit(name)/all_profit) * 100,2)) + ' %')
+            for name in all_names:
+                profit_table.add_row(name, str(bought(name)), str(amount(name)), str(cost(name)), str(revenue(name)),str(round(profit(name),2)), str(round((profit(name)/total_profit) * 100,2)) + ' %')
             profit_table.columns[1].footer = str(sum([int(cell) for cell in profit_table.columns[1].cells]))
-            profit_table.columns[2].footer = str(sum([float(cell) for cell in profit_table.columns[2].cells]))
-            profit_table.columns[3].footer = str(sum([float(cell) for cell in profit_table.columns[3].cells]))
-            profit_table.columns[4].footer = str(all_profit)
-            profit_table.columns[5].footer = str(math.ceil(sum([float(cell.split()[0]) for cell in profit_table.columns[5].cells]))) + ' %'
+            profit_table.columns[2].footer = str(sum([int(cell) for cell in profit_table.columns[2].cells]))
+            profit_table.columns[3].footer = add_col_floats(profit_table, 3)
+            profit_table.columns[4].footer = add_col_floats(profit_table, 4)
+            profit_table.columns[5].footer = str(round(total_profit,2))
+            profit_table.columns[6].footer = str(round(sum([float(cell.split()[0]) for cell in profit_table.columns[6].cells]))) + ' %'
             return profit_table
  
         else: #if not start_date == end_date
-
-            sold_on_range = []
-            for i in sold:
-                if to_ymd(i['sell_date']) >= start_date and to_ymd(i['sell_date']) <= end_date:
-                    sold_on_range.append(i)
-            sold_items = [*set(get_name(int(i['id'])) for i in sold_on_range)]
-            sale_dates = [*set(to_ymd(i['sell_date']) for i in sold_on_range)]
-            all_profit = sum([profit(name) for name in sold_items])
-
+            #['Date','Item', 'Bought','Sold', 'Cost','Revenue', 'Profit','Percentage']
+            
             for x,n in enumerate(columns):
                 profit_table.add_column(n, style = colors[x])
-            for s_date in sale_dates:
+            for s_date in all_dates:
                 p_table = report_profit(s_date, s_date, verbosity)
                 items = [cell for cell in p_table.columns[0].cells]
-                amounts = [cell for cell in p_table.columns[1].cells]
-                costs = [cell for cell in p_table.columns[2].cells]
-                revenues = [cell for cell in p_table.columns[3].cells]
-                profits = [cell for cell in p_table.columns[4].cells]
+                bought = [cell for cell in p_table.columns[1].cells]
+                sold = [cell for cell in p_table.columns[2].cells]
+                costs = [cell for cell in p_table.columns[3].cells]
+                revenues = [cell for cell in p_table.columns[4].cells]
+                profits = [cell for cell in p_table.columns[5].cells]
+                #for x, i in enumerate(costs):
+                #    profits.append(float(revenues[x]) - float(i))
+               # profits = [cell for cell in p_table.columns[4].cells]
                 for x, i in enumerate(items):
-                 profit_table.add_row(from_ymd(s_date),i, amounts[x], costs[x], revenues[x], profits[x], str(round((float(profits[x])/all_profit) * 100,2)) + ' %')
+                    profit_table.add_row(from_ymd(s_date),i, bought[x], sold[x], costs[x], revenues[x], profits[x], str(round((float(profits[x])/total_profit) * 100,2)) + ' %')
             profit_table.columns[2].footer = str(sum([int(cell) for cell in profit_table.columns[2].cells]))
-            profit_table.columns[3].footer = str(sum([float(cell) for cell in profit_table.columns[3].cells]))
-            profit_table.columns[4].footer = str(sum([float(cell) for cell in profit_table.columns[4].cells]))
-            profit_table.columns[5].footer = str(all_profit)
-            profit_table.columns[6].footer = str(math.ceil(sum([float(cell.split()[0]) for cell in profit_table.columns[6].cells]))) + ' %'
-            
+            profit_table.columns[3].footer = str(sum([int(cell) for cell in profit_table.columns[3].cells]))
+            profit_table.columns[4].footer = add_col_floats(profit_table, 4)
+            profit_table.columns[5].footer = add_col_floats(profit_table, 5)
+            profit_table.columns[6].footer = add_col_floats(profit_table, 6)
+            profit_table.columns[7].footer = str(round(sum([float(cell.split()[0]) for cell in profit_table.columns[7].cells]))) + ' %'
+             
             return profit_table
 
     else: #if verbosity = 1
-        short_cols = columns[:3] + columns [5:] 
-        # 'Date','Item', 'amount' 'Profit', 'Percentage'
-        short_colors = colors[:3] + colors[5:]
+        short_cols = columns[1:4] + columns [6:] 
+        # 'Item', 'Bougt', 'Sold' 'Profit', 'Percentage'
+        short_colors = colors[1:4] + colors[6:]
         if start_date == end_date:
-            for x,n in enumerate(short_cols[1:]):
-                profit_table.add_column(n, style = short_colors[x+1])
+            for x,n in enumerate(short_cols):
+                profit_table.add_column(n, style = short_colors[x])
             
             p_table = report_profit(start_date, end_date, verbosity = 2) 
             items = [cell for cell in p_table.columns[0].cells]
-            amounts = [cell for cell in p_table.columns[1].cells]
-            profits = [cell for cell in p_table.columns[4].cells]
-            percentages = [cell for cell in p_table.columns[5].cells]
+            bought = [cell for cell in p_table.columns[1].cells]
+            sold = [cell for cell in p_table.columns[2].cells]
+            profits = [cell for cell in p_table.columns[5].cells]
+            percentages = [cell for cell in p_table.columns[6].cells]
             for x, i in enumerate(items):
-                 profit_table.add_row(i, amounts[x], profits[x], percentages[x])
+                profit_table.add_row(i, bought[x], sold[x], profits[x], percentages[x])
             
             profit_table.columns[1].footer = str(sum([int(cell) for cell in profit_table.columns[1].cells]))
-            profit_table.columns[2].footer = str(sum([float(cell) for cell in profit_table.columns[2].cells]))
-            profit_table.columns[3].footer = str(math.ceil(sum([float(cell.split()[0]) for cell in profit_table.columns[3].cells]))) + ' %'
+            profit_table.columns[2].footer = str(sum([int(cell) for cell in profit_table.columns[2].cells]))
+            profit_table.columns[3].footer = add_col_floats(profit_table, 3)
+            profit_table.columns[4].footer = str(round(sum([float(cell.split()[0]) for cell in profit_table.columns[4].cells]))) + ' %'
 
             return profit_table
 
         else: #if not start_date == end_date
-            for x,n in enumerate(short_cols):
+            for x,n in enumerate(['Date'] + short_cols[1:]):
+                    # 'Date', 'Bougt', 'Sold' 'Profit', 'Percentage'
                 profit_table.add_column(n, style = short_colors[x])
+
+            v2_p_table = {}
             p_table = report_profit(start_date, end_date, verbosity = 2)
             dates = [cell for cell in p_table.columns[0].cells]
             items = [cell for cell in p_table.columns[1].cells]
-            amounts = [cell for cell in p_table.columns[2].cells]
-            profits = [cell for cell in p_table.columns[5].cells]
-            percentages = [cell for cell in p_table.columns[6].cells]
-            for x, i in enumerate(items):
-                 profit_table.add_row(dates[x], i, amounts[x], profits[x], percentages[x])
+            bought = [cell for cell in p_table.columns[2].cells]
+            sold = [cell for cell in p_table.columns[3].cells]
+            profits = [cell for cell in p_table.columns[6].cells]
+            percentages = [cell for cell in p_table.columns[7].cells]
+            for x, i in enumerate(dates):
+                if i not in v2_p_table:
+                    v2_p_table[i] = {'bought': int(bought[x]), 'sold': int(sold[x]), 'profits' : float(profits[x]), 'percentages' : float(percentages[x].split()[0]) }
+                elif i in v2_p_table:
+                    v2_p_table[i]['bought'] += int(bought[x])
+                    v2_p_table[i]['sold'] += int(sold[x])
+                    v2_p_table[i]['profits'] += float(profits[x])
+                    v2_p_table[i]['percentages'] += float(percentages[x].split()[0])
             
+            for x, dict in enumerate(v2_p_table):
+                profit_table.add_row(str(dict), str(v2_p_table[dict]['bought']),str(v2_p_table[dict]['sold']), str(round(v2_p_table[dict]['profits'],2)), str(round(v2_p_table[dict]['percentages'],2)))
+            
+            profit_table.columns[1].footer = str(sum([int(cell) for cell in profit_table.columns[1].cells]))
             profit_table.columns[2].footer = str(sum([int(cell) for cell in profit_table.columns[2].cells]))
-            profit_table.columns[3].footer = str(sum([float(cell) for cell in profit_table.columns[3].cells]))
-            profit_table.columns[4].footer = str(math.ceil(sum([float(cell.split()[0]) for cell in profit_table.columns[4].cells]))) + ' %'
+            profit_table.columns[3].footer = add_col_floats(profit_table, 3)
+            profit_table.columns[4].footer = str(round(sum([float(cell.split()[0]) for cell in profit_table.columns[4].cells]))) + ' %'
 
             return profit_table
 
@@ -995,9 +1111,9 @@ def report_revenue(start_date, end_date, verbosity):
 
                 revenue_table.add_row(name, str(amount(name)), str(cost(name)), str(revenue(name)), str(round((revenue(name)/all_revenue) * 100,2)) + ' %')
             revenue_table.columns[1].footer = str(sum([int(cell) for cell in revenue_table.columns[1].cells]))
-            revenue_table.columns[2].footer = str(sum([float(cell) for cell in revenue_table.columns[2].cells]))
-            revenue_table.columns[3].footer = str(sum([float(cell) for cell in revenue_table.columns[3].cells]))
-            percent_sum = math.ceil(sum([float(cell.split()[0]) for cell in revenue_table.columns[4].cells]))
+            revenue_table.columns[2].footer = add_col_floats(revenue_table, 2)
+            revenue_table.columns[3].footer = add_col_floats(revenue_table, 3)
+            percent_sum = round(sum([float(cell.split()[0]) for cell in revenue_table.columns[4].cells]))
             revenue_table.columns[4].footer = ('100' if percent_sum >= 100 and percent_sum <= 101 else str(percent_sum)) + ' %'
             return revenue_table
         else: #if not start_date == end_date
@@ -1020,9 +1136,9 @@ def report_revenue(start_date, end_date, verbosity):
                 for x, i in enumerate(items):
                  revenue_table.add_row(from_ymd(s_date),i, amounts[x], costs[x], revenues[x], str(round((float(revenues[x])/all_revenue) * 100,2)) + ' %')
             revenue_table.columns[2].footer = str(sum([int(cell) for cell in revenue_table.columns[2].cells]))
-            revenue_table.columns[3].footer = str(sum([float(cell) for cell in revenue_table.columns[3].cells]))
-            revenue_table.columns[4].footer = str(sum([float(cell) for cell in revenue_table.columns[4].cells]))
-            percent_sum = math.ceil(sum([float(cell.split()[0]) for cell in revenue_table.columns[5].cells]))
+            revenue_table.columns[3].footer = add_col_floats(revenue_table, 3)
+            revenue_table.columns[4].footer = add_col_floats(revenue_table, 4)
+            percent_sum = round(sum([float(cell.split()[0]) for cell in revenue_table.columns[5].cells]))
             revenue_table.columns[5].footer = ('100' if percent_sum >= 100 and percent_sum <= 101 else str(percent_sum)) + ' %'
             return revenue_table
 
@@ -1051,8 +1167,8 @@ def report_revenue(start_date, end_date, verbosity):
                 revenue_table.add_row(i, amounts[x], revenues[x], percentages[x])
             
             revenue_table.columns[1].footer = str(sum([int(cell) for cell in revenue_table.columns[1].cells]))
-            revenue_table.columns[2].footer = str(sum([float(cell) for cell in revenue_table.columns[2].cells]))
-            percent_sum = math.ceil(sum([float(cell.split()[0]) for cell in revenue_table.columns[3].cells]))
+            revenue_table.columns[2].footer = add_col_floats(revenue_table, 2)
+            percent_sum = round(sum([float(cell.split()[0]) for cell in revenue_table.columns[3].cells]))
             revenue_table.columns[3].footer = ('100' if percent_sum >= 100 and percent_sum <= 101 else str(percent_sum)) + ' %'
             return revenue_table
 
@@ -1069,9 +1185,9 @@ def report_revenue(start_date, end_date, verbosity):
                 revenue_table.add_row(dates[x], i, amounts[x], revenues[x], percentages[x])
             
             revenue_table.columns[2].footer = str(sum([int(cell) for cell in revenue_table.columns[2].cells]))
-            revenue_table.columns[3].footer = str(sum([float(cell) for cell in revenue_table.columns[3].cells]))
-            percent_sum = math.ceil(sum([float(cell.split()[0]) for cell in revenue_table.columns[4].cells]))
-            revenue_table.columns[4].footer = ('100' if percent_sum >= 100 and percent_sum <= 101 else str(percent_sum)) + ' %'
+            revenue_table.columns[3].footer = add_col_floats(revenue_table, 3)
+            percent_sum = round(sum([float(cell.split()[0]) for cell in revenue_table.columns[4].cells]))
+            revenue_table.columns[4].footer = ('100' if percent_sum >= 99 and percent_sum <= 101 else str(percent_sum)) + ' %'
 
             return revenue_table
 
@@ -1083,23 +1199,41 @@ def report_item(start_date, end_date, verbosity= 1,item= 0, id= 0 ):
     short_color_list = long_color_list[1:]
     #['Price','Bought','Sold', 'Profit']
     i = 0
-
+    bp = 0
     item_table= Table(title= f'{item if item else get_name(id)} report' + (f' with id: {id}' if id else ''), box = box.SIMPLE_HEAVY)
     item_table.show_footer = True
 
     if item:
-        #NOTE make footer with totals
         if verbosity == 2:
+            totals_table = Table(title= 'Totals')
+            buy_prices =[]
+            sale_prices =[]
+            total_bought = 0
+            total_sold = 0
+            total_profit = 0
             ids = get_id_list(item)
             for id in ids:
                 id_table = report_item(start_date, end_date, verbosity, id= id)
                 item_table.add_row(id_table)
+                buy_prices.append(float(id_table.columns[1].footer))
+                sale_prices.append(float(id_table.columns[2].footer))
+                total_bought += int(id_table.columns[3].footer)
+                total_sold += int(id_table.columns[4].footer)
+                total_profit += float(id_table.columns[5].footer)
+            for y, x in enumerate(long_fields):
+                totals_table.add_column(x, style= long_color_list[y])
+            totals_table.add_row(
+                '',str(round(sum(buy_prices)/len(buy_prices), 2)),
+                str(round(sum(sale_prices)/len(sale_prices), 2)), 
+                str(total_bought), str(total_sold), 
+                str(round(total_profit,2)))
+            item_table.add_row(totals_table)
             item_table.show_footer = False                
             return item_table
             
 
         else:
-            item_compound_history = []
+            item_compound_history = [] 
             ids = get_id_list(item)
             for id in ids:
                 item_compound_history += id_compound_history(id, start_date, end_date)
@@ -1140,49 +1274,47 @@ def report_item(start_date, end_date, verbosity= 1,item= 0, id= 0 ):
                     item_table.add_column(field, style=short_color_list[x])
 
                 for i in mini_history:
-                    profit = (i[3]*i[1])-(i[0]*i[2])
+                    bp = i[0] if i[0] else bp
+                    profit = (i[3]*i[1])-(bp*(i[2] if i[2] else i[3]))
                     item_table.add_row(
                         str(i[0]) if i[0] else '-',
                         str(i[1]) if i[1] else '-',
                         str(i[2]) if i[2] else '-',
                         str(i[3]) if i[3] else '-',
-                        str(profit) if profit else '-')
+                        str(round(profit, 2)) if profit else '-')
 
                     bought += i[3]
                     sold += i[4]
                     profit_total += profit
-                item_table.columns[0].footer = str(sum(buy_prices)/len(buy_prices))
-                item_table.columns[1].footer = str(sum(sell_prices)/len(sell_prices))
+                item_table.columns[0].footer = str(round(sum(buy_prices)/len(buy_prices),2))
+                item_table.columns[1].footer = str(round(sum(sell_prices)/len(sell_prices),2))
                 item_table.columns[2].footer = str(bought)
                 item_table.columns[3].footer = str(sold)
-                item_table.columns[4].footer = str(profit_total)
-                console = Console()
-                console.CONSOLE.print(item_table)
+                item_table.columns[4].footer = str(round(profit_total, 2))
                 return item_table
 
-            else:
+            else: #if verbosity 1
                 for x, field in enumerate(long_fields):
                     item_table.add_column(field, style=long_color_list[x])
 
                 for i in compact_history:
-                    profit = (i[4]*i[2])-(i[1]*i[3])
+                    bp = i[1] if i[1] else bp
+                    profit = (i[4]*i[2])-(bp*(i[3] if i[3] else i[4]))
                     item_table.add_row(from_ymd(i[0]),
                         str(i[1]) if i[1] else '-',
                         str(i[2]) if i[2] else '-',
                         str(i[3]) if i[3] else '-',
                         str(i[4]) if i[4] else '-',
-                        str(profit) if profit else '-')
+                        str(round(profit, 2)) if profit else '-')
 
                     bought += i[3]
                     sold += i[4]
                     profit_total += profit
-                item_table.columns[1].footer = str(sum(buy_prices)/len(buy_prices))
-                item_table.columns[2].footer = str(sum(sell_prices)/len(sell_prices))
+                item_table.columns[1].footer = str(round(sum(buy_prices)/len(buy_prices),2))
+                item_table.columns[2].footer = str(round(sum(sell_prices)/len(sell_prices),2))
                 item_table.columns[3].footer = str(bought)
                 item_table.columns[4].footer = str(sold)
-                item_table.columns[5].footer = str(profit_total)
-                console = Console()
-                console.CONSOLE.print(item_table)
+                item_table.columns[5].footer = str(round(profit_total, 2))
                 return item_table
 
     elif id:
@@ -1202,23 +1334,24 @@ def report_item(start_date, end_date, verbosity= 1,item= 0, id= 0 ):
             for x, field in enumerate(long_fields):
                 item_table.add_column(field, style=long_color_list[x])
             for i in compound_history:
-                profit = (i[4]*i[2])-(i[1]*i[3])
+                bp = i[1] if i[1] else bp
+                profit = (i[4]*i[2])-(bp*(i[3] if i[3] else i[4]))
                 item_table.add_row(
                     from_ymd(i[0]),
                     str(i[1]) if i[1] else '-',
                     str(i[2]) if i[2] else '-',
                     str(i[3]) if i[3] else '-',
                     str(i[4]) if i[4] else '-',
-                    str(profit) if profit else '-'
+                    str(round(profit, 2)) if profit else '-'
                     )
                 bought += i[3]
                 sold += i[4]
                 profit_total += profit
-            item_table.columns[1].footer = str(sum(buy_prices)/len(buy_prices))
-            item_table.columns[2].footer = str(sum(sell_prices)/len(sell_prices))
+            item_table.columns[1].footer = str(round(sum(buy_prices)/len(buy_prices),2))
+            item_table.columns[2].footer = str(round(sum(sell_prices)/len(sell_prices),2))
             item_table.columns[3].footer = str(bought)
             item_table.columns[4].footer = str(sold)
-            item_table.columns[5].footer = str(profit_total)
+            item_table.columns[5].footer = str(round(profit_total, 2))
             return item_table
 
         else:
@@ -1256,21 +1389,23 @@ def report_item(start_date, end_date, verbosity= 1,item= 0, id= 0 ):
                     item_table.add_column(field, style=short_color_list[x])
 
                 for i in mini_history:
-                    profit = (i[3]*i[1])-(i[0]*i[2])
+                    bp = i[0] if i[0] else bp
+                    profit = (i[3]*i[1])-(bp*(i[2] if i[2] else i[3]))
+                    
                     item_table.add_row(
                         str(i[0]) if i[0] else '-',
                         str(i[1]) if i[1] else '-',
                         str(i[2]) if i[2] else '-',
                         str(i[3]) if i[3] else '-',
-                        str(profit) if profit else '-')
+                        str(round(profit, 2)) if profit else '-')
                     bought += i[3]
                     sold += i[4]
                     profit_total += profit
-                item_table.columns[0].footer = str(sum(buy_prices)/len(buy_prices))
-                item_table.columns[1].footer = str(sum(sell_prices)/len(sell_prices))
+                item_table.columns[0].footer = str(round(sum(buy_prices)/len(buy_prices),2))
+                item_table.columns[1].footer = str(round(sum(sell_prices)/len(sell_prices),2))
                 item_table.columns[2].footer = str(bought)
                 item_table.columns[3].footer = str(sold)
-                item_table.columns[4].footer = str(profit_total)
+                item_table.columns[4].footer = str(round(profit_total, 2))
                 return item_table
 
             else:
@@ -1279,41 +1414,52 @@ def report_item(start_date, end_date, verbosity= 1,item= 0, id= 0 ):
                     item_table.add_column(field, style=long_color_list[x])
 
                 for i in compact_history:
-                    profit = (i[4]*i[2])-(i[1]*i[3])
+                    bp = i[1] if i[1] else bp
+                    profit = (i[4]*i[2])-(bp*(i[3] if i[3] else i[4]))
                     item_table.add_row(from_ymd(i[0]),
                         str(i[1]) if i[1] else '-',
                         str(i[2]) if i[2] else '-',
                         str(i[3]) if i[3] else '-',
                         str(i[4]) if i[4] else '-',
-                        str(profit) if profit else '-')
+                        str(round(profit, 2)) if profit else '-')
 
                     bought += i[3]
                     sold += i[4]
                     profit_total += profit
-                item_table.columns[1].footer = str(sum(buy_prices)/len(buy_prices))
-                item_table.columns[2].footer = str(sum(sell_prices)/len(sell_prices))
+                item_table.columns[1].footer = str(round(sum(buy_prices)/len(buy_prices),2))
+                item_table.columns[2].footer = str(round(sum(sell_prices)/len(sell_prices),2))
                 item_table.columns[3].footer = str(bought)
                 item_table.columns[4].footer = str(sold)
-                item_table.columns[5].footer = str(profit_total)
+                item_table.columns[5].footer = str(round(profit_total, 2))
                 return item_table
 
  
 #----------------------------- BUY ACTION HANDLING ----------------------------#
 def buy(product_name, amount, buy_date, buy_price, expiration_date, id= 0, sell_price = 0):
     #revise similar prices for items of the same name and ask if the same price is desired
-    for i in range(len(amount)):
-        id = (get_last_id("purchased.csv") +1) if not id else id
-        with open('purchased.csv', 'a', newline='') as buying_file:
-            field_names = ['id', 'amount', 'product_name', 'buy_date', 'buy_price', 'expiration_date']
-            writer = csv.DictWriter(buying_file, fieldnames=field_names)
-            writer.writerow({'id': id, 'amount': amount[i], 'product_name': product_name, 'buy_date': buy_date, 'buy_price': buy_price, 'expiration_date': expiration_date[i]})
-        with open('price_history.csv', 'a', newline='') as price_history_file:
-            field_names_b = ['id', 'price', 'price_date']
-            writer_b = csv.DictWriter(price_history_file, fieldnames=field_names_b)
-            if sell_price:
-                writer_b.writerow({'id': id, 'price': sell_price, 'price_date': buy_date})
+    id = (get_last_id("bought.csv") +1) if not id else id
+    with open('bought.csv', 'a', newline='') as buying_file:
+        field_names = ['id', 'amount', 'product_name', 'buy_date', 'buy_price', 'expiration_date']
+        writer = csv.DictWriter(buying_file, fieldnames=field_names)
+        writer.writerow({'id': id, 'amount': amount, 'product_name': product_name, 'buy_date': buy_date, 'buy_price': buy_price, 'expiration_date': expiration_date})
+    with open('prices.csv', 'a', newline='') as price_history_file:
+        field_names_b = ['id', 'price', 'price_date']
+        writer_b = csv.DictWriter(price_history_file, fieldnames=field_names_b)
+        if sell_price:
+            writer_b.writerow({'id': id, 'price': sell_price, 'price_date': buy_date})
+        else:
+            ids = get_id_list(product_name)
+            if ids:
+                price_ids = [int(i['id']) for i in dict_list_csv('prices.csv') if float(i['price'])]
+                price_ids = [i for i in price_ids if i in ids]
+                if price_ids:
+                    last_price = last_sale_price(max(price_ids, default= 0),buy_date)
+                else:
+                    last_price = 0
             else:
-                writer_b.writerow({'id': id, 'price': sell_price, 'price_date': buy_date})
+                last_price = 0
+            sell_price = last_price if last_price else 0
+            writer_b.writerow({'id': id, 'price': sell_price, 'price_date': buy_date})
 
 
 #--------------------------- PRICE SETTING HANDLING ---------------------------#
@@ -1322,10 +1468,11 @@ def set_price(price, price_date, list = None, id = 0, item = ''):
         if last_sale_price(id,price_date) == price:
             pass
         else:
-            with open('price_history.csv', 'a', newline='') as price_file:
-                field_names = ['id','price','price_date','sold_on_price']
+            with open('prices.csv', 'a', newline='') as price_file:
+                field_names = ['id','price','price_date']
                 writer = csv.DictWriter(price_file, fieldnames=field_names)
                 writer.writerow({'id': id, 'price':price, 'price_date':price_date})
+            CONSOLE.print(f'The price for id {id} has been set to {price}')
     elif item:
         item = item
         id_list= get_id_list(item)
@@ -1336,17 +1483,16 @@ def set_price(price, price_date, list = None, id = 0, item = ''):
             if last_sale_price(id,price_date) == price:
                pass
             else:
-                with open('price_history.csv', 'a', newline='') as price_file:
-                    field_names = ['id','price','price_date','sold_on_price']
+                with open('prices.csv', 'a', newline='') as price_file:
+                    field_names = ['id','price','price_date']
                     writer = csv.DictWriter(price_file, fieldnames=field_names)
                     writer.writerow({'id': list[i], 'price':price, 'price_date':price_date})
-
+                CONSOLE.print(f'The price for id {list[i]} has been set to {price}')
+        
 
 #---------------------------- SELL ACTION HANDLING ----------------------------#
 def sell(sell_date, sold_amount = 1, sell_price = None, id= 0, item= 0):
-    #RETHINK THIS
-    #handle selling more items of the same name but different id
-    #make get element only offer options with stock available
+    last_sale = get_last_id('sold.csv')
     if id:
         item_id = get_available(sell_date, sold_amount, id=id) #can return False, an int or a list of tuples 
         if type(item_id) == int:
@@ -1355,6 +1501,7 @@ def sell(sell_date, sold_amount = 1, sell_price = None, id= 0, item= 0):
                 sell_price = float(last_sale_price(id=item_id, given_date =sell_date))
                 if sell_price == 0:
                     sell_price = float(input('The current price for this item is 0, please insert a price: '))
+                    set_price(sell_price, sell_date, id= item_id)
             elif sell_price:
                 product_name = get_name(item_id)
                 name_matches = get_id_list(product_name)
@@ -1364,18 +1511,22 @@ def sell(sell_date, sold_amount = 1, sell_price = None, id= 0, item= 0):
                         set_price(sell_price, sell_date, list= name_matches)
                     elif do_same == 'no':
                         set_price(sell_price, sell_date, id= item_id)
-                else:#if it is a one item list
+                elif len(name_matches) == 1:
                     set_price(sell_price, sell_date, id= item_id[0])
             with open('sold.csv', 'a', newline='') as selling_file:
                 field_names = ['sell_id', 'id', 'amount_sold', 'sell_date', 'sell_price']
                 writer = csv.DictWriter(selling_file, fieldnames=field_names)
                 writer.writerow({'sell_id': sell_id, 'id': item_id, 'amount_sold': sold_amount, 'sell_date': sell_date, 'sell_price': sell_price})
+                sale_total = sold_amount*sell_price
+            last_after_sale = get_last_id('sold.csv')
+            if last_after_sale > last_sale:
+                CONSOLE.print(f'Sale completed for {sale_total}')
         elif type(item_id) == list:
             for i in item_id:
-                #Type check is there to maybe later implement being able to insert a list of ids to sell????
                 if type(i) == tuple:
                     #i[0] is the id i[1] is the amount
                     sell(sell_date,i[1],sell_price, id= i[0])
+        
             
     elif item:
         item_id =get_available(date = sell_date,sold_amount = sold_amount,item= item) 
@@ -1385,6 +1536,7 @@ def sell(sell_date, sold_amount = 1, sell_price = None, id= 0, item= 0):
                 sell_price = float(last_sale_price(id=item_id, given_date =sell_date))
                 if sell_price == 0:
                     sell_price = float(input('The current price for this item is 0, please insert a price: '))
+                    set_price(sell_price, sell_date, id= item_id)
             elif sell_price:
                 product_name = get_name(item_id)
                 name_matches = get_id_list(product_name)
@@ -1400,73 +1552,107 @@ def sell(sell_date, sold_amount = 1, sell_price = None, id= 0, item= 0):
                 field_names = ['sell_id', 'id', 'amount_sold', 'sell_date', 'sell_price']
                 writer = csv.DictWriter(selling_file, fieldnames=field_names)
                 writer.writerow({'sell_id': sell_id, 'id': item_id, 'amount_sold': sold_amount, 'sell_date': sell_date, 'sell_price': sell_price})
+                sale_total = sold_amount*sell_price
+            last_after_sale = get_last_id('sold.csv')
+            if last_after_sale > last_sale:
+                CONSOLE.print(f'Sale completed for {sale_total}')
         elif type(item_id) == list:
             for i in item_id:
                 #Type check is there to maybe later implement being able to insert a list of ids to sell????
                 if type(i) == tuple:
                     #i[0] is the id i[1] is the amount
                     sell(sell_date,i[1],sell_price, id= i[0])
-
+    
 
 #-------------------------- SAVE ACTION HANDLING ----------------------------#
 def save(dest_type, table, sys_date):
     dict_list =[]
-    title = table.title.lower().replace(' ', '_')
-    saved_file = (title + '_' + from_ymd(sys_date) + '.' + dest_type)
-    
-    for x in range(table.row_count):
+    if isinstance(table, str):
+        t_dict_item = {}
+        phrase = table.split()
+        txt_0 = phrase[2]
+        date_txt = [i for i in phrase if to_ymd(i)]
+        if len(date_txt) > 1:
+            title = txt_0 + '_' + date_txt[0] + '_to_' + date_txt[1]
+            t_dict_item[title] = phrase[-1]
+        else:
+            title = txt_0 + '_' + date_txt[0]
+            t_dict_item[title] = phrase[-1]
+        saved_file = (txt_0 + '_report_' + from_ymd(sys_date) + '.' + dest_type)
+        dict_list.append(t_dict_item)
+    else:
+        title = table.title.lower().replace(':', '').replace('with ', '')
+        title = title.replace(' ', '_')
+        saved_file = (title + '_' + from_ymd(sys_date) + '.' + dest_type)
+        def make_dict(i_table):
+            for x in range(i_table.row_count):
+                i_dict = {}
+                for column in i_table.columns:
+                    d_value = list(column.cells)[x]
+                    d_value = d_value if not isinstance(d_value, Text) else str(d_value)
+                    i_dict[column.header] = d_value
+                dict_list.append(i_dict)
+
+        for x in range(table.row_count):
             dict_item = {}
             for column in table.columns:
                 d_value = list(column.cells)[x]
-                d_value = d_value if not isinstance(d_value, Text) else str(d_value)
-                dict_item[column.header] = d_value
+                if isinstance(d_value, Table): #this handles the v2 item reports
+                    make_dict(d_value)
+                else:
+                    d_value = d_value if not isinstance(d_value, Text) else str(d_value)
+                    dict_item[column.header] = d_value
+            
             dict_list.append(dict_item)
-    
+   
+    saved_path =os.path.join('saved', saved_file)
     if dest_type == 'xlsx':
         df = pd.DataFrame(data=dict_list)
-        df.to_excel(saved_file, index = False)
+        df.to_excel(saved_path, index = False)
     elif dest_type == 'json':
         json_list = json.dumps(dict_list, indent= 2)
-        with open(saved_file, 'w') as json_save:
+        with open(saved_path, 'w') as json_save:
             json_save.write(json_list)
     elif dest_type == 'csv':
-        with open(saved_file, 'w') as csv_save:
+        with open(saved_path, 'w') as csv_save:
             writer = csv.DictWriter(csv_save, fieldnames= dict_list[0].keys() )
+
             writer.writeheader()
             for row in dict_list:
                 
                 writer.writerow(row)
-    return str(saved_file)
+    return str(saved_path)
 
 def export(csv_file, sys_date, dest_type, destination = False): #almost the same as save(), divided for clarity
     dict_list = dict_list_csv(csv_file)
     title = destination if destination else csv_file[:-4]
     saved_file = (title + '_' + from_ymd(sys_date) + '.' + dest_type)
+    saved_path =os.path.join('saved', saved_file)
     
     dict_list = dict_list_csv(csv_file)
 
     if dest_type == 'xlsx':
         df = pd.DataFrame(data=dict_list)
-        df.to_excel(saved_file, index = False)
+        df.to_excel(saved_path, index = False)
     elif dest_type == 'json':
         json_list = json.dumps(dict_list, indent= 2)
-        with open(saved_file, 'w') as json_save:
+        with open(saved_path, 'w') as json_save:
             json_save.write(json_list)
     elif dest_type == 'csv':
-        with open(saved_file, 'w') as csv_save:
+        with open(saved_path, 'w') as csv_save:
             writer = csv.DictWriter(csv_save, fieldnames= dict_list[0].keys() )
             writer.writeheader()
             for row in dict_list:
                 
                 writer.writerow(row)
-    return str(saved_file)
+    return str(saved_path)
 
 
-#------------------------- CLASS INSTANCE LIST MAKERS -------------------------#
+#------------------------- CLASS LIST MAKERS -------------------------#
 def makelist(version, start_date, end_date): #makes a list of dictionaries based on product name or id, focused on reporting the inventory
     id_item_list = []
     name_item_list = []
-    bought_list = dict_list_csv('purchased.csv')
+    bought_list = dict_list_csv('bought.csv')
     if version == 'id': #This will make a list of class instances based on the ID of the item
         for bought_item in bought_list:
             item_id = int(bought_item['id'])
@@ -1504,6 +1690,8 @@ def makelist(version, start_date, end_date): #makes a list of dictionaries based
             item_remaining = item_amount - item_sold
             item_expired = getdate.check_expired(item_expiration)
             item_profit = get_total_profit(item_id,end_date)
+            if not item_remaining: 
+                continue #fixes out of stock items getting added and messing up the profit calculations
             if start_date == end_date or (start_date == 0):
                 if item_buy_date <= end_date:
                     if item_name in name_list and item_name not in expired_name_list and item_expired:
@@ -1590,29 +1778,28 @@ def makelist(version, start_date, end_date): #makes a list of dictionaries based
 
 
 #---------------- RETRIEVING INFORMATION FROM AN EXTERNAL FILE ----------------#
-def import_data(file, csv_file, append=False, overwrite=False):
+def import_data(file, csv_file, date, append=False, overwrite=False):
     #The first section converts the file to a list of dictionaries for easier import
     extension = file.split('.')[-1].lower()
     if extension == 'csv':
         data_dict_list = dict_list_csv(file)
         cf = pd.read_csv(file)
         from_columns = list(cf.columns)
-    elif extension == 'xlsx' or extension == 'xls':
+    elif extension == 'xlsx':
         xld =pd.read_excel(file, sheet_name = None)
         #xld will always return a dict bc of None
         sheet_list = list(xld)
         if len(sheet_list) > 1:
-            sheet = input('Which sheet will be imported? \nPlease enter a name or index, \nIf it is the first sheet you can simply press enter:')
+            sheet = input(f'Which sheet from {sheet_list} will be imported? \nPlease enter a name or index, \nIf it is the first sheet you can simply press enter:')
             selected_sheet = 0 if not sheet else sheet
-            if selected_sheet:
+            try:
+                xlf =pd.read_excel(file,sheet_name = selected_sheet)
+            except:
                 try:
-                    xlf =pd.read_excel(file,sheet_name = selected_sheet)
+                    xlf =pd.read_excel(file,sheet_name = int(selected_sheet))
                 except:
-                    try:
-                        xlf =pd.read_excel(file,sheet_name = int(selected_sheet))
-                    except:
-                        CONSOLE.print('The program will automatically grab the fist page as no valid page was given')
-                        xlf =pd.read_excel(file,sheet_name = sheet_list[0])
+                    CONSOLE.print('The program will automatically grab the fist page as no valid page was given')
+                    xlf =pd.read_excel(file,sheet_name = sheet_list[0])
         else:
             xlf =pd.read_excel(file,sheet_name = sheet_list[0])
         data_dict_list= xlf.to_dict('records')
@@ -1622,7 +1809,7 @@ def import_data(file, csv_file, append=False, overwrite=False):
             jsondata = json.load(json_file)
             if type(jsondata) == dict: #format in json_a_test
                 if len(list(jsondata)) > 1:
-                    j_section = input('please name the section to convert')
+                    j_section = input(f'Please name the section to convert\n{list(jsondata)} : ')
                     data_dict_list = jsondata[j_section]
                 else:
                     data_dict_list = jsondata[list(jsondata)[0]]
@@ -1630,100 +1817,103 @@ def import_data(file, csv_file, append=False, overwrite=False):
                 data_dict_list = jsondata
             from_columns = list(data_dict_list[0].keys())
     else:
-        CONSOLE.print('lease select a valid file to import')
+        CONSOLE.print('Please select a valid file to import')
         return False
     
     csv_headers = list(pd.read_csv(csv_file).columns)
     key_check = same_names(csv_file, from_columns) 
     eq = {}
-    if key_check and isinstance(key_check, list): 
+    
+    if not key_check:
+        return False
+    elif isinstance(key_check, list): 
         for x in range(len(key_check)):
             eq[csv_headers[x]] = key_check[x]
+    example = data_dict_list[-1]
 
-    if csv_file == 'purchased.csv':
-        try:
-            date_txt = i['buy_date']
-        except:
-            date_txt = i[eq['buy_date']]
+    if csv_file == 'bought.csv':
+        warning = ("If your inventory contained product id's the append section will override that with it's own id's")
+        date_key = 'buy_date' if not eq else eq['buy_date']
     elif csv_file == 'sold.csv':
-        try:
-            date_txt = i['sell_date']
-        except:
-            date_txt = i[eq['sell_date']]
-    elif csv_file == 'price_history.csv':
-        try:
-            date_txt = i['price_date']
-        except:
-            date_txt = i[eq['price_date']]
-
+        warning = ("If your document contained it's own product id's appending this could cause conflict")
+        date_key = 'sell_date' if not eq else eq['sell_date']
+    elif csv_file == 'prices.csv':
+        warning = ("If your document contained it's own product id's appending this could cause conflict with the data")
+        date_key = 'price_date' if not eq else eq['price_date']
+    
+    date_txt = example[date_key]
     date_format = False   
-    try:
-        to_ymd(date_txt)
-
-    except:
-        CONSOLE.print('The dates on oyur file dont seem to have a "%Y-%m-%d"format')
-        order = input('Please establish the date format separating the order by spaces\nexample: month day year:')
+    if to_ymd(date_txt):
+        pass
+    else:
+        CONSOLE.print('The dates on your file do not seem to have a "%Y-%m-%d" format')
+        order = input('Please establish the date format separating the order by spaces\nexample: month day year: ')
         order= order.split()
         date_format = get_date_format(date_txt, order)
-        if date_format:
-            date_txt = convert_to_ymd_txt(date_txt,date_format)
-        else:
+        if not date_format:
             CONSOLE.print('The date format provided is not valid, the import has beed cancelled to prevent fatal data corruption, please retry')
             return False
-    
-    for i in data_dict_list:
-        if append:
-            if csv_file == 'purchased.csv':
-                warning = ("If your inventory contained product id's the append section will override that with it's own id's")
-                CONSOLE.print(warning)
-                
-                if key_check and not eq:
-                    exp_date = convert_to_ymd_txt(i['expiration_date'], date_format) if date_format else i['expiration_date']
-                    try:
-                        buy(i['product_name'], i['amount'], date_txt, i['buy_price'], exp_date, sell_price= i['sell_price'])
-                    except:
-                        buy(i['product_name'], i['amount'], date_txt, i['buy_price'], exp_date)
-                elif key_check and eq:
-                    exp_date = convert_to_ymd_txt(i[eq['expiration_date']], date_format) if date_format else i[eq['expiration_date']]
-                    buy(i[eq['product_name']], i[eq['amount']],date_txt, i[eq['buy_price']], i[eq['expiration_date']])
-                    
-            elif csv_file == 'sold.csv':
-                warning = ("If your document contained it's own product id's appending this could cause conflict")
-                CONSOLE.print(warning)
-                if key_check and not isinstance(key_check, list):
-                    sell(i['sell_date'], i['sold_amount'], i['sell_price'], id = i['id'])
-            elif csv_file == 'price_hisotry.csv':
-                warning = ("If your document contained it's own product id's appending this could cause conflict with the data")
-                CONSOLE.print(warning)
-                if key_check and not isinstance(key_check, list):
-                    set_price(i['price'], i['price_date'], id = i['id'])
+    if append:
+        CONSOLE.print(warning)
+    elif overwrite:
+        wipe_csv(csv_file,date,csv_headers)
 
-        elif overwrite:
-            wipe_csv(csv_file)
-            if csv_file == 'purchased.csv':
+    if csv_file == 'bought.csv':
+        for i in data_dict_list:
+            buy_date = convert_to_ymd_txt(i[date_key], date_format) if date_format else i[date_key]
+            exp_key = 'expiration_date' if not eq else eq['expiration_date']
+            exp_date = convert_to_ymd_txt(i[exp_key], 
+                    date_format) if date_format else i[exp_key]
+
+            if append:
                 if key_check and not eq:
+                    
                     try:
-                        buy(i['product_name'], i['amount'], i['buy_date'], i['buy_price'], i['expiration_date'], id = i['id'], sell_price= i['sell_price'])
+                        buy(i['product_name'], i['amount'], buy_date, i['buy_price'], exp_date, sell_price= i['sell_price'])
                     except:
                         try:
-                            buy(i['product_name'], i['amount'], i['buy_date'], i['buy_price'], i['expiration_date'],  id = i['id'])
+                            buy(i['product_name'], i['amount'], buy_date, i['buy_price'], exp_date, sell_price= i['sale_price'])
                         except:
-                            buy(i['product_name'], i['amount'], i['buy_date'], i['buy_price'], i['expiration_date'])
+                            try:
+                                buy(i['product_name'], i['amount'], buy_date, i['buy_price'], exp_date, sell_price= i['price'])
+                            except:
+                                buy(i['product_name'], i['amount'], buy_date, i['buy_price'],expiration_date= exp_date)
+                elif key_check and eq:
+                    buy(i[eq['product_name']], i[eq['amount']],buy_date, i[eq['buy_price']], exp_date)
+
+            
+            elif overwrite:
+                if key_check and not eq:
+                    try:
+                        buy(i['product_name'], i['amount'], buy_date, i['buy_price'], exp_date, id = i['id'], sell_price= i['sell_price'])
+                    except:
+                        try:
+                            buy(i['product_name'], i['amount'], buy_date, i['buy_price'], exp_date, id = i['id'], sell_price= i['sale_price'])
+                        except:
+                            try:
+                                buy(i['product_name'], i['amount'],buy_date, i['buy_price'], exp_date, id = i['id'], sell_price= i['price'])
+                            except:
+                                try:
+                                    buy(i['product_name'], i['amount'], buy_date, i['buy_price'],exp_date,  id = i['id'])
+                                except:
+                                    buy(i['product_name'], i['amount'],buy_date, i['buy_price'], exp_date)
                 elif key_check and eq:
                     try:
-                        buy(i[eq['product_name']], i[eq['amount']], i[eq['buy_date']], i[eq['buy_price']], i[eq['expiration_date']], id = i[eq['id']])
+                        buy(i[eq['product_name']], i[eq['amount']], buy_date, i[eq['buy_price']], exp_date, id = i[eq['id']])
                     except:
-                        buy(i[eq['product_name']], i[eq['amount']], i[eq['buy_date']], i[eq['buy_price']], i[eq['expiration_date']])
-        
-            elif csv_file == 'sold.csv':
-                if key_check and not eq:
-                    sell(i['sell_date'], i['sold_amount'], i['sell_price'], id = i['id'])
-                elif key_check and eq:
-                    sell(i[eq['sell_date']], i[eq['sold_amount']], i[eq['sell_price']], id = i[eq['id']])
+                        buy(i[eq['product_name']], i[eq['amount']], buy_date, i[eq['buy_price']], exp_date)
 
-            elif csv_file == 'price_hisotry.csv':
-                if key_check and not eq:
-                    set_price(i['price'], i['price_date'], id = i['id'])
-                elif key_check and eq:
-                    set_price(i[eq['price']], i[eq['price_date']], id = i[eq['id']])
+
+    else:
+        if date_format:
+            for i in data_dict_list:
+                print(date_format)
+                i[date_key] = convert_to_ymd_txt(i[date_key], date_format)
+
+        fieldnames = csv_headers if not eq else list(eq.values())
+        with open(csv_file, 'a') as import_file:
+                writer = csv.DictWriter(import_file, fieldnames= fieldnames )
+                for row in data_dict_list:
+                        writer.writerow(row)
+        #this happens for both append and overwrite because the file wiping has already been handled
     CONSOLE.print('The import has been completed')

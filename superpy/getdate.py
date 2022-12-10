@@ -46,7 +46,10 @@ def run_date_check():
         
 
 def makedate(original, input):
-    new_date = (original + timedelta(days = int(input))).date()
+    try:
+        new_date = (original + timedelta(days = int(input))).date()
+    except:
+        new_date = (original + timedelta(days = int(input)))
     if new_date == date.today():
         
         fict_date('write', new_date= new_date, changed= 0)
