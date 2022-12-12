@@ -32,7 +32,7 @@ For this command it returns the current system date after advancing the time, th
 
 &nbsp;
 
-To reuse a command you can press the *up arrow* and voilá; your command has come back and you can edit it.  
+To re-use a command you can press the *up arrow* and voilá; your command has come back and you can edit it.  
 
 &nbsp;
 
@@ -47,7 +47,7 @@ To reuse a command you can press the *up arrow* and voilá; your command has com
 
 ---
 
-When managing inventory, sales, and prices; you will likely want the program to be settled on the date you want these actions to take parton.  
+When managing inventory, sales, and prices; you will likely want the program to be settled on the date you want these actions to take part on.  
 You can of course manually import the date into the terminal when you want the action to occur in a different date than that wich the program is on. The program will default the date to the current system date, this, however, can get tiresome if you need to perform a lot of actions.  
 
 > For this very reason the following commands were implemented:
@@ -57,11 +57,11 @@ You can of course manually import the date into the terminal when you want the a
 
 As you can see; the shorter of the two terms or list items is simply an abbreviation to the longer one, either of which can be used in the command line
 
-To use **--advance-time**(*-at*), all you need to do is write by how much time you wish the date to change in the number of days, it will also accept negative numbers to go *back in time* 
+To use **--advance-time**(*-at*), all you need to do is write by how much time you wish the date to change in the number of days, it will also accept negative numbers to go *back in time*.  
 
-To use **--system-time**(*-st*), you only need to write down the command as its main function is to let you know what date the system is on.
+To use **--system-time**(*-st*), you only need to write down the command as it's main function is to let you know what date the system is on.
 
-**--set-time-to-current**(*-reset*) only requires the command as well, as it will reset the system time to what the computer perceives as today
+**--set-time-to-current**(*-reset*) only requires the command as well, as it will reset the system time to what the computer perceives as today.
 
 &nbsp;
 
@@ -91,12 +91,11 @@ Example:
 
 &nbsp;
 
-
 ## Importing data  
 
 ---
 
-It is important to know that of the program utilizes *csv* file type files to store the information, you are, however, not limited to this file type when importing information.
+It is important to know that the program utilizes *csv* files to store the information, you are, however, not limited to this file type when importing information.
 
 > The commands implemented to support the import of your own data:
 > - -csv, --csv-name
@@ -111,8 +110,6 @@ You will need all three commands to be able to import your own data.
 *append* will add the information to the existing information in the program.   
 *overwrite* will delete the information on the chosen program file (don't worry, it'll create a backup) and replace it with the information you have given it.  
 
-&nbsp;
-
 **--file-name**(*-fn*) is the file name or full path of the file including file name where the information you want to import is stored, if you sent that file to your SuperPy folder you don't need to type the full path, if you sent it to a folder within the SuperPy folder; make sure you include the folder name in the path, the program supports the import of:  
 - csv
 - json
@@ -124,7 +121,6 @@ files, it is important that the files contain at least very similar information 
 - The date format can also be different to the one we use, the program will detect this and only ask you to give it the order (yearm,month, date or other)  
 - The columns can also be in a different order, once the names and name equivalents have been detected or given, the program will itself organize the information.  
 
-
 **--csv-name**(*-csv*) is simply the program file that you will be importing the data to, your choices and their columns are:  
 - bought.csv, id,amount,product_name,buy_date,buy_price,expiration_date
 - sold.csv, sell_id,id,amount_sold,sell_date,sell_price
@@ -132,9 +128,7 @@ files, it is important that the files contain at least very similar information 
 
 &nbsp;
 
-Examples:
-
-&nbsp;
+#### Examples:
 
 ---
 
@@ -158,7 +152,7 @@ Importing with the same format and column names:
 >
 >The import has been completed  
 
-Here we gave it all three arguments, this excel file has multiple sheets and thus the program asks close to tell it which sheet it needs to import, here we wrote *purch* but we could have just as well written *1* this because indexes start up *0*.  
+Here we gave it all three arguments, this excel file has multiple sheets and thus the program asks close to tell it which sheet it needs to import, here we wrote *purch* but we could have just as well written *1* this because indexes start up from *0*.  
 Because the date format and the column names were the same, the import simply continues, first backing up the information that was already in the program, and then replacing it with the data we gave it.
 
 &nbsp;
@@ -197,18 +191,13 @@ Now that it knows where to look for each bit of information, the program realize
 
 &nbsp;
 
----
-
 &nbsp;
-
-&nbsp;
-
 
 ## Exporting data  
 
 ---
 
-The export command is quite similar to the import command in its execution, this set of commands will allow you to select one of the program files and export it with the name you desire
+The export command is quite similar to the import command in its execution, this set of commands will allow you to select one of the program files and export it with the name you desire.
 
 > The commands implemented to support the export of the program data:  
 > - -csv, --csv-name
@@ -222,7 +211,7 @@ The export command is quite similar to the import command in its execution, this
 
 &nbsp;
 
-Example:  
+#### Example:  
 >D:\Computer\Programs\superpy> python main.py export -csv prices.csv -fn test_price_exp -et xlsx  
 >      
 >Exported file has been saved as saved\test_price_exp_2022-12-05.xlsx  
@@ -230,7 +219,6 @@ Example:
 &nbsp;
 
 &nbsp;
-
 
 ## Backing up and wiping  
 
@@ -753,7 +741,6 @@ In this example as well as the next one, we have chosen a date range, only the s
 > D:\Computer\Programs\superpy>
           
 &nbsp;
----
 
 &nbsp;
 
@@ -812,8 +799,6 @@ Examples:
 As you can see in the examples, you can get your expired inventory report with just the *report e* commands, like all other reports, youc an choose a specifict date or date range, this will base the table on the items bought and sold within said date range.
 
 &nbsp;
-
----
 
 &nbsp;
 
@@ -897,9 +882,9 @@ Examples:
 As you can see in theese examples, profit reports can be both extensive or extremely simple, and date ranges are easy to pick, if you give it only a year or a year-month, the program will automatically create a range from the first day of the first date to the last day of the last date given.  
 You can of course also request specific dates or date rangesBy simply typing in full dates.
 
----
 &nbsp;
 
+&nbsp;
 
 ### r, Revenue
 
@@ -979,8 +964,9 @@ Examples:
 As you can see in theese examples, revenue reports can be both extensive or extremely simple, and date ranges are easy to pick, if you give it only a year or a year-month, the program will automatically create a range from the first day of the first date to the last day of the last date given.  
 You can of course also request specific dates or date rangesBy simply typing in full dates.
 
----
           
+&nbsp;
+
 &nbsp;
 
 
@@ -1048,7 +1034,6 @@ This one is a bit more complex, this elaborate report will give you a separate t
 
 &nbsp;
 
----
 
 &nbsp;
 
@@ -1100,8 +1085,6 @@ This one is a bit more complex, this elaborate report will give you a separate t
 > D:\Computer\Programs\superpy>
 
 &nbsp;
-
----
 
 &nbsp;
 
