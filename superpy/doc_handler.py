@@ -22,21 +22,21 @@ CLASSES ---------------------------------------    42-69
 
 BASIC FILE FUNCTIONS---------------------------    70-112
 
-INFO GETTERS-----------------------------------    113-692
+INFO GETTERS-----------------------------------    113-733
 
-REPORT SECTION---------------------------------    693-1345
+REPORT SECTION---------------------------------    733-1436
 
-BUY ACTION HANDLING----------------------------    1346-1365
+BUY ACTION HANDLING----------------------------    1438-1364
 
-PRICE ACTION HANDLING--------------------------    1366-1391
+PRICE ACTION HANDLING--------------------------    1465-1492
 
-SELL ACTION HANDLING---------------------------    1392-1453
+SELL ACTION HANDLING---------------------------    1493-1566
 
-SAVE ACTION HANDLING---------------------------    1454-1538
+SAVE ACTION HANDLING---------------------------    1567-1650
  
-CLASS LIST MAKERS------------------------------    1539-1667
+CLASS LIST MAKERS------------------------------    1651-1779
 
-RETRIEVING INFORMATION FROM AN EXTERNAL FILE---    1668-1810
+RETRIEVING INFORMATION FROM AN EXTERNAL FILE---    1780-1919
 """
 CONSOLE = Console()
 class ItemById:
