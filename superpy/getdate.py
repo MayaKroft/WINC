@@ -1,21 +1,24 @@
 from datetime import date, timedelta
 from datetime import datetime
 import csv
+import os
 
 #run date check will revise the last datelog when run, if it is the same day as today it will leave the log alone, if not, it will chaqnge run date withouth changing the fictional one and change new date to true, also sending a message to the user asking if they want to remain on the last ficitonla date or set it to the current one
 #similar to retrieve but destined for the first run of the day and nothing more
 #------------------------------ DATE LOG HANDLING -----------------------------#
 #NOTE: fict date is in get date and not doc handler to prevent circular import
+
 def fict_date(action, date = date.today(), new_date = 0, changed = 0):
-   
+    file= 'date_log.csv'
+    f_path = os.path.abspath(file)
     fieldnames = ['run_date', 'fictional_date', 'date_changed']
     if action == 'write':
-         with open('D:\OneDrive\YO\ADULTOSEAR\Educacion\Programacion\WINC\\assignments\superpy\date_log.csv', 'w', newline = '') as date_file:
+         with open(f_path, 'w', newline = '') as date_file:
             writer = csv.DictWriter(date_file, fieldnames= fieldnames)
             writer.writeheader()
             writer.writerow({'run_date': date, 'fictional_date': new_date, 'date_changed': changed})  
     elif action == 'read':
-         with open('D:\OneDrive\YO\ADULTOSEAR\Educacion\Programacion\WINC\\assignments\superpy\date_log.csv', 'r', newline = '') as date_file:
+         with open(f_path, 'r', newline = '') as date_file:
             reader = csv.DictReader(date_file)
             last_date = [row for row in reader]
             return last_date[-1]
@@ -38,10 +41,8 @@ def run_date_check():
     elif (not last_date == date.today()) and is_changed:
         keep_changed = input(f'The last fictional date was {last_fake_date}, would you like to keep it(keep) or move tot he actual date (today)')
         if keep_changed == 'keep':
-            
             fict_date('write', date.today(), last_fake_date, 1)
         if keep_changed == 'today':
-            
             fict_date('write', date.today(), date.today(), 0)
         
 
@@ -51,10 +52,8 @@ def makedate(original, input):
     except:
         new_date = (original + timedelta(days = int(input)))
     if new_date == date.today():
-        
         fict_date('write', new_date= new_date, changed= 0)
     else:
-        
         fict_date('write', new_date= new_date, changed= 1)
     return new_date
 

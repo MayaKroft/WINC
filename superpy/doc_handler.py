@@ -20,23 +20,23 @@ to convert it's information to the programs CSV format plus doing most of the da
 ------INDEX--------
 CLASSES ---------------------------------------    42-69
 
-BASIC FILE FUNCTIONS---------------------------    70-112
+BASIC FILE FUNCTIONS---------------------------    70-105
 
-INFO GETTERS-----------------------------------    113-733
+INFO GETTERS-----------------------------------    106-646
 
-REPORT SECTION---------------------------------    733-1436
+REPORT SECTION---------------------------------    647-1351
 
-BUY ACTION HANDLING----------------------------    1438-1364
+BUY ACTION HANDLING----------------------------    1352-1379
 
-PRICE ACTION HANDLING--------------------------    1465-1492
+PRICE ACTION HANDLING--------------------------    1380-1407
 
-SELL ACTION HANDLING---------------------------    1493-1566
+SELL ACTION HANDLING---------------------------    1408-1481
 
-SAVE ACTION HANDLING---------------------------    1567-1650
+SAVE ACTION HANDLING---------------------------    1482-1565
  
-CLASS LIST MAKERS------------------------------    1651-1779
+CLASS LIST MAKERS------------------------------    1566-1649
 
-RETRIEVING INFORMATION FROM AN EXTERNAL FILE---    1780-1919
+RETRIEVING INFORMATION FROM AN EXTERNAL FILE---    1650-1789
 """
 CONSOLE = Console()
 class ItemById:
@@ -53,7 +53,7 @@ class ItemById:
         self.expired = expired
         self.profit = profit
 
-class ItemByName:
+class ItemByName: #Not compatible with ItemById as it compiles things like prices and dates into a list, condensing the information of every instance of the same name
     def __init__(self, name, amount, buy_price, buy_date, expiration, sale_price, sold, remaining, expired, profit):
         self.name = name
         self.amount = amount
@@ -69,20 +69,13 @@ class ItemByName:
 
 #--------------------- HANDLING SOME BASIC FILE FUNCTIONS ---------------------#
 def dict_list_csv(file):
+    f_path = os.path.abspath(file)
     dict_list = []
-    try:
-        with open(file, 'r', newline='') as read_file:
-                reader = csv.DictReader(read_file)
-                for row in reader:
-                    dict_list.append(row)
-                return dict_list
-    except:
-        file = os.path.abspath(f'superpy\{file}')
-        with open(file, 'r', newline='') as read_file:
-                reader = csv.DictReader(read_file)
-                for row in reader:
-                    dict_list.append(row)
-                return dict_list
+    with open(f_path, 'r', newline='') as read_file:
+        reader = csv.DictReader(read_file)
+        for row in reader:
+            dict_list.append(row)
+        return dict_list
 
 def backup_csv(file,date = False):
     date = from_ymd(date) if date else date
@@ -147,14 +140,13 @@ def is_valid_id(id, date = 0):
                 is_valid = True
             else:
                 continue
-        return is_valid
     else:
         for item in bought:
             if int(item['id']) == id:
                 is_valid = True
             else:
                 continue
-        return is_valid
+    return is_valid
 
 def is_valid_item(item, date = 0):
     is_valid = False
@@ -164,18 +156,15 @@ def is_valid_item(item, date = 0):
             if i['product_name'] == item:
                 if to_ymd(i['buy_date']) <= date:
                     is_valid = True
-                else:
-                    continue
             else:
                 continue
-        return is_valid
     else:
         for i in bought:
             if i['product_name'] == item:
                 is_valid = True
             else:
                 continue
-            return is_valid
+    return is_valid
 
 def get_name(id):
     id = id if isinstance(id, int) else int(id)
@@ -202,7 +191,8 @@ def last_sale_price(id, given_date): #This function searches the price history o
             if to_ymd(item['price_date']) <= given_date:
                 price_dates.append(to_ymd(item['price_date']))
 
-    for item in price_history:
+    for item in price_history: 
+        #This repeat is necessary fo price_dates is complete when it runs
         if int(item['id']) == id:
             if price_dates and to_ymd(item['price_date']) == max(price_dates):
                 last_price = float(item['price'])
@@ -269,37 +259,22 @@ def get_total_revenue(id, end_date, start_date= 0):
 def get_total_cost(id,end_date,start_date= 0):
     id = id if isinstance(id, int) else int(id)
     bought = dict_list_csv('bought.csv')
+    total_cost = 0
     if start_date:
-        total_cost = 0
         bought_on_range = []
         for i in bought:
             if int(i['id']) == id:
                 if to_ymd(i['buy_date']) >= start_date and to_ymd(i['buy_date']) <= end_date:
-                    bought_on_range.append(i)
-            else:
-                pass
+                    bought_on_range.append(i)  
         for b in bought_on_range:
             total_cost +=  float(b['buy_price']) * int(b['amount'])
-        return total_cost
         
-        #if start_date == end_date:
-        #    total_cost = (last_buy_price(id, end_date) * amount_sold(id, end_date, start_date))
-        #    return total_cost
-        #else:
-        """ total_cost = 0.0
-        for b_item in bought:
-            buy_date = to_ymd(b_item['buy_date'])
-            if int(b_item['id']) == id and buy_date >= start_date and buy_date <= end_date:
-                total_cost += (float(b_item['buy_price']) * int(b_item['amount'])) """
-
     else:
-        total_cost = 0.0
         for b_item in bought :
             buy_date = to_ymd(b_item['buy_date'])
             if int(b_item['id']) == id and buy_date <= end_date:
                 total_cost += (float(b_item['buy_price']) * int(b_item['amount']))
-        return total_cost
-
+    return total_cost
 
 def get_total_profit(id,end_date,start_date= 0):
     id = id if isinstance(id, int) else int(id)
@@ -309,7 +284,6 @@ def get_total_profit(id,end_date,start_date= 0):
         total_cost = get_total_cost(id, end_date, start_date)
         total_profit = total_revenue - total_cost
         
-
     else:
         total_revenue = get_total_revenue(id, end_date)
         total_cost = 0.0
@@ -320,10 +294,7 @@ def get_total_profit(id,end_date,start_date= 0):
     
     return round(total_profit, 2)
 
-
-
 def check_amount(id, current_date):
-    #make sure it is a valid id
     id = id if type(id) == int else int(id) #just making sure the type is always right
     current_date = current_date if isinstance(current_date, datetime.date) else to_ymd(current_date)
     bought = dict_list_csv('bought.csv')
@@ -357,7 +328,6 @@ def get_available(date, sold_amount, id = 0, item = ''):
             CONSOLE.print('The program will search for products with a matching name to the given id')
             product_name = get_name(id)
             return get_available(date, sold_amount, item= product_name)
-            #ADD PROGRESS BAR
 
     elif item:
         options_total = 0
@@ -428,120 +398,63 @@ def id_buy_history(id, start_date, end_date):
     id = id if isinstance(id, int) else int(id)
     id_buy_history = {} 
     bought= dict_list_csv('bought.csv')
-    if start_date == end_date or start_date == 0:
-        for buy in bought:
-            if id == int(buy['id']):
-                buy_date = to_ymd(buy['buy_date'])
-                buy_str_date= buy['buy_date']
-                if buy_date <= end_date:
-                    if buy_str_date not in list(id_buy_history.keys()):
-                        id_buy_history[buy_str_date] = {'price': float(buy['buy_price']), 'amount': int(buy['amount'])}
-                    else:
-                        if isinstance(id_buy_history[buy_str_date], dict):
-                            id_buy_history[buy_str_date] = [id_buy_history[buy_str_date]] + [{'price': float(buy['buy_price']), 'amount': int(buy['amount'])},]
-                        elif isinstance(id_buy_history[buy_str_date], list):
-                            id_buy_history[buy_str_date] += [{'price': float(buy['buy_price']), 'amount': int(buy['amount'])},]
+    start_date = start_date if start_date else end_date
+    
+    for buy in bought:
+        if id == int(buy['id']):
+            buy_date = to_ymd(buy['buy_date'])
+            buy_str_date= buy['buy_date']
+            if (buy_date <= end_date and start_date == end_date) or (start_date != end_date and buy_date >= start_date and buy_date<= end_date):
+                if buy_str_date not in list(id_buy_history.keys()):
+                    id_buy_history[buy_str_date] = {'price': float(buy['buy_price']), 'amount': int(buy['amount'])}
                 else:
-                    continue
-            else:
-                continue
-    else:
-        for buy in bought:
-            if id == int(buy['id']):
-                buy_date = to_ymd(buy['buy_date'])
-                buy_str_date= buy['buy_date']
-                if buy_date >= start_date and buy_date<= end_date:
-                    if buy_str_date not in list(id_buy_history.keys()):
-                        id_buy_history[buy_str_date] = {'price': float(buy['buy_price']), 'amount': int(buy['amount'])}
-                    else:
-                        if isinstance(id_buy_history[buy_str_date], dict):
-                            id_buy_history[buy_str_date] = [id_buy_history[buy_str_date]] + [{'price': float(buy['buy_price']), 'amount': int(buy['amount'])},]
-                        elif isinstance(id_buy_history[buy_str_date], list):
-                            id_buy_history[buy_str_date] += [{'price': float(buy['buy_price']), 'amount': int(buy['amount'])},]
-                else:
-                    continue
-            else:
-                continue
+                    if isinstance(id_buy_history[buy_str_date], dict):
+                        id_buy_history[buy_str_date] = [id_buy_history[buy_str_date]] + [{'price': float(buy['buy_price']), 'amount': int(buy['amount'])},]
+                    elif isinstance(id_buy_history[buy_str_date], list):
+                        id_buy_history[buy_str_date] += [{'price': float(buy['buy_price']), 'amount': int(buy['amount'])},]
+        else:
+            continue
     return id_buy_history
 
 def id_sale_history(id, start_date, end_date):
     id = id if isinstance(id, int) else int(id)
     id_sale_history = {}
     sales = dict_list_csv('sold.csv')
-    if start_date == end_date or start_date == 0:
-        for sale in sales:
-            if id == int(sale['id']):
-                sale_date = to_ymd(sale['sell_date'])
-                sale_str_date= sale['sell_date']
-                if sale_date <= end_date:
-                    if sale_str_date not in list(id_sale_history.keys()):
-                        id_sale_history[sale_str_date] = {'sale_price': float(sale['sell_price']), 'amount': int(sale['amount_sold']), 'sale_id': int(sale['sell_id'])}
-                    else:
-                        if isinstance(id_sale_history[sale_str_date], dict):
-                            id_sale_history[sale_str_date] = [id_sale_history[sale_str_date]] + [{'sale_price': float(sale['sell_price']), 'amount': int(sale['amount_sold']), 'sale_id': int(sale['sell_id'])},]
-                        elif isinstance(id_sale_history[sale_str_date], list):
-                            id_sale_history[sale_str_date] += [{'sale_price': float(sale['sell_price']), 'amount': int(sale['amount_sold']), 'sale_id': int(sale['sell_id'])},]
+    start_date = start_date if start_date else end_date
+    for sale in sales:
+        if id == int(sale['id']):
+            sale_date = to_ymd(sale['sell_date'])
+            sale_str_date= sale['sell_date']
+            if (sale_date <= end_date and start_date == end_date) or (start_date != end_date and sale_date >= start_date and sale_date<= end_date):
+                if sale_str_date not in list(id_sale_history.keys()):
+                    id_sale_history[sale_str_date] = {'sale_price': float(sale['sell_price']), 'amount': int(sale['amount_sold']), 'sale_id': int(sale['sell_id'])}
                 else:
-                    continue
-            else:
-                continue
-    else:
-        for sale in sales:
-            #FIX APPENT AND MAKE A DICT LIST IN DATE WHEN EXISTING
-            if id == int(sale['id']):
-                sale_date = to_ymd(sale['sell_date'])
-                sale_str_date= sale['sell_date']
-                if sale_date >= start_date and sale_date <= end_date :
-                    if sale_str_date not in list(id_sale_history.keys()):
-                        id_sale_history[sale_str_date] = {'sale_price': float(sale['sell_price']), 'amount': int(sale['amount_sold']), 'sale_id': int(sale['sell_id'])}
-                    else:
-                        if isinstance(id_sale_history[sale_str_date], dict):
-                            id_sale_history[sale_str_date] = [id_sale_history[sale_str_date]] + [{'sale_price': float(sale['sell_price']), 'amount': int(sale['amount_sold']), 'sale_id': int(sale['sell_id'])},]
-                        elif isinstance(id_sale_history[sale_str_date], list):
-                            id_sale_history[sale_str_date] += [{'sale_price': float(sale['sell_price']), 'amount': int(sale['amount_sold']), 'sale_id': int(sale['sell_id'])},]
-                else:
-                    continue
-            else:
-                continue
+                    if isinstance(id_sale_history[sale_str_date], dict):
+                        id_sale_history[sale_str_date] = [id_sale_history[sale_str_date]] + [{'sale_price': float(sale['sell_price']), 'amount': int(sale['amount_sold']), 'sale_id': int(sale['sell_id'])},]
+                    elif isinstance(id_sale_history[sale_str_date], list):
+                        id_sale_history[sale_str_date] += [{'sale_price': float(sale['sell_price']), 'amount': int(sale['amount_sold']), 'sale_id': int(sale['sell_id'])},]
+        else:
+            continue
     return id_sale_history
 
 def id_price_history(id, start_date, end_date):
     id = id if isinstance(id, int) else int(id)
     id_price_history = {}
     prices = dict_list_csv('prices.csv')
-    if start_date == end_date or start_date == 0:
-        for price in prices:
-            if id == int(price['id']):
-                price_date = to_ymd(price['price_date'])
-                price_str_date= price['price_date']
-                if price_date <= end_date:
-                    if price_str_date not in list(id_price_history.keys()):
-                        id_price_history[price_str_date] = float(price['price'])
-                    else:
-                        if isinstance(id_price_history[price_str_date], float):
-                            id_price_history[price_str_date] = [id_price_history[price_str_date]] + [float(price['price']),]
-                        elif isinstance(id_price_history[price_str_date], list):
-                            id_price_history[price_str_date] += [float(price['price']),]
-
+    start_date = start_date if start_date else end_date
+    # if (price_date <= end_date and start_date == end_date) or (start_date != end_date and price_date >= start_date and price_date<= end_date):
+    for price in prices:
+        if id == int(price['id']):
+            price_date = to_ymd(price['price_date'])
+            price_str_date= price['price_date']
+            if (price_date <= end_date and start_date == end_date) or (start_date != end_date and price_date >= start_date and price_date<= end_date):
+                if price_str_date not in list(id_price_history.keys()):
+                    id_price_history[price_str_date] = float(price['price'])
                 else:
-                    continue
-            else:
-                continue
-    else:
-        for price in prices:
-            if id == int(price['id']):
-                price_date = to_ymd(price['price_date'])
-                price_str_date= price['price_date']
-                if price_date >= start_date and price_date <= end_date:
-                    if price_str_date not in list(id_price_history.keys()):
-                        id_price_history[price_str_date] = float(price['price'])
-                    else:
-                        if isinstance(id_price_history[price_str_date], float):
-                            id_price_history[price_str_date] = [id_price_history[price_str_date]] + [float(price['price']),]
-                        elif isinstance(id_price_history[price_str_date], list):
-                            id_price_history[price_str_date] += [float(price['price']),]
-                else:
-                    continue
+                    if isinstance(id_price_history[price_str_date], float):
+                        id_price_history[price_str_date] = [id_price_history[price_str_date]] + [float(price['price']),]
+                    elif isinstance(id_price_history[price_str_date], list):
+                        id_price_history[price_str_date] += [float(price['price']),]
             else:
                 continue
     return id_price_history
@@ -668,7 +581,7 @@ def same_names(csv_file, from_headers):
        or(set(alternative)).issubset(set(from_headers))):
             extras = list(set(from_headers).difference(csv_headers))
             if ('sell_price' in extras or 'price' in extras or 'sale_price' in extras) and csv_file == 'bought.csv': 
-                #this can be added thanks to the buy function which would smoothe the import
+                #this can be added thanks to the buy function which would smooth the import
                 return True
             else:
                 CONSOLE.print(f'The import will continue but only the colums \n{csv_headers} will be imported\n{extras} will be left out')
@@ -1212,6 +1125,7 @@ def report_item(start_date, end_date, verbosity= 1,item= 0, id= 0 ):
             total_sold = 0
             total_profit = 0
             ids = get_id_list(item)
+            ids = [i for i in ids if is_valid_id(i,end_date)]
             for id in ids:
                 id_table = report_item(start_date, end_date, verbosity, id= id)
                 item_table.add_row(id_table)
@@ -1235,6 +1149,7 @@ def report_item(start_date, end_date, verbosity= 1,item= 0, id= 0 ):
         else:
             item_compound_history = [] 
             ids = get_id_list(item)
+            ids = [i for i in ids if is_valid_id(i,end_date)]
             for id in ids:
                 item_compound_history += id_compound_history(id, start_date, end_date)
             item_compound_history = sorted(item_compound_history, key=lambda tup: (tup[0],-tup[1]))
@@ -1653,6 +1568,8 @@ def makelist(version, start_date, end_date): #makes a list of dictionaries based
     id_item_list = []
     name_item_list = []
     bought_list = dict_list_csv('bought.csv')
+    start_date = start_date if start_date else end_date
+
     if version == 'id': #This will make a list of class instances based on the ID of the item
         for bought_item in bought_list:
             item_id = int(bought_item['id'])
@@ -1665,15 +1582,11 @@ def makelist(version, start_date, end_date): #makes a list of dictionaries based
             item_sold = amount_sold(item_id, end_date)
             item_remaining = item_amount - item_sold
             item_expired = getdate.check_expired(item_expiration)
-            item_profit = get_total_profit(item_id,end_date) #start date as well?
-            if start_date == end_date or start_date == 0:
-                if item_buy_date <= end_date:
-                    id_item_list.append(
-                        ItemById(id= item_id, name= item_name, amount= item_amount ,buy_price= item_buy_price, buy_date= item_buy_date, expiration= item_expiration, sale_price= item_sale_price, sold= item_sold, remaining= item_remaining, expired= item_expired, profit= item_profit))
-            else:
-                if item_buy_date >= start_date and item_buy_date <= end_date:
-                    id_item_list.append(
-                        ItemById(id= item_id, name= item_name, amount= item_amount ,buy_price= item_buy_price, buy_date= item_buy_date, expiration= item_expiration, sale_price= item_sale_price, sold= item_sold, remaining= item_remaining, expired= item_expired, profit= item_profit))
+            item_profit = get_total_profit(item_id,end_date)
+            
+            if (item_buy_date <= end_date and start_date == end_date) or (start_date != end_date and item_buy_date >= start_date and item_buy_date<= end_date):
+                id_item_list.append(
+                    ItemById(id= item_id, name= item_name, amount= item_amount ,buy_price= item_buy_price, buy_date= item_buy_date, expiration= item_expiration, sale_price= item_sale_price, sold= item_sold, remaining= item_remaining, expired= item_expired, profit= item_profit))
         return id_item_list          
     elif version == 'name': #This will create a list that merges information based on the item name, separated only by wether some are expired or not
         name_list = []
@@ -1692,7 +1605,7 @@ def makelist(version, start_date, end_date): #makes a list of dictionaries based
             item_profit = get_total_profit(item_id,end_date)
             if not item_remaining: 
                 continue #fixes out of stock items getting added and messing up the profit calculations
-            if start_date == end_date or (start_date == 0):
+            if (item_buy_date <= end_date and start_date == end_date) or (start_date != end_date and item_buy_date >= start_date and item_buy_date<= end_date):
                 if item_buy_date <= end_date:
                     if item_name in name_list and item_name not in expired_name_list and item_expired:
                         expired_name_list.append(item_name)
@@ -1702,8 +1615,6 @@ def makelist(version, start_date, end_date): #makes a list of dictionaries based
                         for class_item in name_item_list:
                             if class_item.name == item_name and class_item.expired == item_expired:
                                 class_item.amount = class_item.amount + item_amount
-                                #buy_price, buy date is list
-                                #modify tojust give an average?
                                 class_item.buy_price = make_classlist(class_item.buy_price, item_buy_price)
                                 class_item.buy_date = make_classlist(class_item.buy_date, item_buy_date)
                                 class_item.expiration = make_classlist(class_item.expiration, item_expiration)
@@ -1732,48 +1643,7 @@ def makelist(version, start_date, end_date): #makes a list of dictionaries based
                         elif not item_expired:
                             name_list.append(item_name)
                         name_item_list.append(
-                            ItemByName(name= item_name, amount= item_amount ,buy_price= [item_buy_price], buy_date= [item_buy_date], expiration= [item_expiration], sale_price= [item_sale_price], sold= item_sold, remaining= item_remaining, expired= item_expired, profit= item_profit))
-
-            else:
-                if item_buy_date >= start_date and item_buy_date <= end_date:
-                    if item_name in name_list and item_name not in expired_name_list and item_expired:
-                        expired_name_list.append(item_name)
-                        name_item_list.append(
-                            ItemByName(name= item_name, amount= item_amount ,buy_price= [item_buy_price], buy_date= [item_buy_date], expiration= [item_expiration], sale_price= [item_sale_price], sold= item_sold, remaining= item_remaining, expired= item_expired, profit= item_profit))
-                    elif item_name in name_list and not item_expired:
-                        for class_item in name_item_list:
-                            if class_item.name == item_name and class_item.expired == item_expired:
-                                class_item.amount = class_item.amount + item_amount
-                                class_item.buy_price = make_classlist(class_item.buy_price, item_buy_price)
-                                class_item.buy_date = make_classlist(class_item.buy_date, item_buy_date)
-                                class_item.expiration = make_classlist(class_item.expiration, item_expiration)
-                                class_item.sale_price = make_classlist(class_item.sale_price, item_sale_price)
-                                class_item.sold = class_item.sold + item_sold
-                                class_item.remaining = class_item.remaining if item_expired else class_item.remaining + item_remaining
-                                class_item.profit = class_item.profit + item_profit
-                    elif item_name not in name_list and item_name in expired_name_list and not item_expired:
-                        name_list.append(item_name)
-                        name_item_list.append(
-                            ItemByName(name= item_name, amount= item_amount ,buy_price= [item_buy_price], buy_date= [item_buy_date], expiration= [item_expiration], sale_price= [item_sale_price], sold= item_sold, remaining= item_remaining, expired= item_expired, profit= item_profit))
-                    elif item_name in expired_name_list:
-                        for class_item in name_item_list:
-                            if class_item.name == item_name and class_item.expired == item_expired:
-                                class_item.amount = class_item.amount + item_amount
-                                class_item.buy_price = make_classlist(class_item.buy_price, item_buy_price)
-                                class_item.buy_date = make_classlist(class_item.buy_date, item_buy_date)
-                                class_item.expiration = make_classlist(class_item.expiration, item_expiration)
-                                class_item.sale_price = make_classlist(class_item.sale_price, item_sale_price)
-                                class_item.sold = class_item.sold + item_sold
-                                class_item.remaining = class_item.remaining + item_remaining
-                                class_item.profit = class_item.profit + item_profit
-                    else:
-                        if item_expired:
-                            expired_name_list.append(item_name)
-                        elif not item_expired:
-                            name_list.append(item_name)
-                        name_item_list.append(
-                            ItemByName(name= item_name, amount= item_amount ,buy_price= [item_buy_price], buy_date= [item_buy_date], expiration= [item_expiration], sale_price= [item_sale_price], sold= item_sold, remaining= item_remaining, expired= item_expired, profit= item_profit))
-                
+                            ItemByName(name= item_name, amount= item_amount ,buy_price= [item_buy_price], buy_date= [item_buy_date], expiration= [item_expiration], sale_price= [item_sale_price], sold= item_sold, remaining= item_remaining, expired= item_expired, profit= item_profit))    
         return name_item_list
 
 
