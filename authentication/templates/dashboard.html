@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+
+    <h1>{{data.username}}'s Dashboard!</h1>
+
+{%if data.age%}
+    <p>
+        Your age: {{ data['age'] }}</p>
+    </p>
+{% else %}
+    <p> No age registered </p>
+{% endif %}
+{% endblock content %}
+

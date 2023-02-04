@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Home</h2>
+<p>Welcome to the homepage.</p>
+<p>This is Python.</p>
+<p>Well, actually, this is HTML.</p>
+<p class="largeText boldText">We use Jinja to mix the two.</p>
+<p>{{message}}</p>
+{%if 'logged_in' in session%}
+<li><a href="/logout">Logout</a></li>
+{% endif %}
+{% endblock content %}
+
